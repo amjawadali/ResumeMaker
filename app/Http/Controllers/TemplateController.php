@@ -9,12 +9,12 @@ class TemplateController extends Controller
     public function index()
     {
         $templates = Template::active()->get();
-        return view('templates.index', compact('templates'));
+        return \Inertia\Inertia::render('Templates/Index', compact('templates'));
     }
 
     public function show(Template $template)
     {
-        return view('templates.show', compact('template'));
+        return \Inertia\Inertia::render('Templates/Show', compact('template'));
     }
 
     public function preview(Template $template)
@@ -36,10 +36,11 @@ class TemplateController extends Controller
             ]
         ];
 
-        return view('resumes.preview-layout', [
+        return \Inertia\Inertia::render('Resumes/Preview', [
+            'resume' => $resume,
             'template_view' => $template->blade_view,
+            'mode' => 'preview',
             'data' => [
-                'resume' => $resume,
                 'user' => $user,
                 'userDetail' => $user->userDetail ?? new \App\Models\UserDetail(),
                 'educations' => $user->educations,

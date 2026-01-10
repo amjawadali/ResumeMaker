@@ -12,7 +12,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::with('roles')->latest()->paginate(20);
-        return view('admin.users.index', compact('users'));
+        return \Inertia\Inertia::render('Admin/Users/Index', compact('users'));
     }
 
     public function show(User $user)

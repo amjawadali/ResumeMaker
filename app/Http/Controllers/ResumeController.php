@@ -7,14 +7,23 @@ use App\Models\Template;
 use App\Models\UserDetail;
 use App\Http\Requests\StoreResumeRequest;
 use App\Http\Requests\UpdateResumeRequest;
+use App\Services\LatexEngine\LatexConverter;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Str;
 
 class ResumeController extends Controller
 {
     use AuthorizesRequests;
+
+    protected $latexConverter;
+
+    public function __construct(LatexConverter $latexConverter)
+    {
+        $this->latexConverter = $latexConverter;
+    }
     public function index()
     {
         $user = auth()->user()->loadCount(['resumes', 'educations', 'experiences', 'skills', 'certifications']);
@@ -28,13 +37,31 @@ class ResumeController extends Controller
         if ($user->skills_count > 0) $completion += 20;
         if ($user->certifications_count > 0) $completion += 20;
 
-        return view('resumes.index', compact('resumes', 'user', 'completion'));
+        return \Inertia\Inertia::render('Dashboard', [
+            'resumes' => $resumes,
+            'completion' => $completion
+        ]);
     }
 
     public function create()
     {
         $templates = Template::active()->get();
-        return view('resumes.create', compact('templates'));
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+
+        return \Inertia\Inertia::render('Resumes/Create', [
+            'templates' => $templates,
+            'template_id' => request('template_id'),
+            'data' => [
+                'user' => $user,
+                'userDetail' => $user->userDetail ?? new UserDetail(),
+                'educations' => $user->educations,
+                'experiences' => $user->experiences,
+                'skills' => $user->skills,
+                'certifications' => $user->certifications,
+                'languages' => $user->languages,
+                'resume' => new Resume(), // Empty resume object for template to consume safely
+            ]
+        ]);
     }
 
     public function store(StoreResumeRequest $request)
@@ -59,6 +86,7 @@ class ResumeController extends Controller
         $validated['custom_styling'] = [];
         $validated['sections_order'] = [];
         $validated['content_override'] = [];
+        $validated['latex_source'] = $this->latexConverter->jsonToLatex(['elements' => []]);
 
         try {
             $resume = Resume::create($validated);
@@ -85,7 +113,19 @@ class ResumeController extends Controller
         $certifications = $user->certifications;
         $languages = $user->languages;
         
-        return view('resumes.show', compact('resume', 'user', 'userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages'));
+        return \Inertia\Inertia::render('Resumes/Show', [
+            'resume' => $resume,
+            'template_view' => $resume->template->blade_view, 
+            'data' => [
+                'user' => $user,
+                'userDetail' => $user->userDetail ?? new UserDetail(),
+                'educations' => $user->educations,
+                'experiences' => $user->experiences,
+                'skills' => $user->skills,
+                'certifications' => $user->certifications,
+                'languages' => $user->languages,
+            ]
+        ]);
     }
 
     public function preview(Resume $resume)
@@ -95,10 +135,11 @@ class ResumeController extends Controller
         $resume->load('template');
         $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
 
-        return view('resumes.preview-layout', [
-            'template_view' => $resume->template->blade_view,
+        return \Inertia\Inertia::render('Resumes/Preview', [
+            'resume' => $resume,
+            'template_view' => $resume->template->blade_view, 
+            'mode' => request('mode', 'preview'),
             'data' => [
-                'resume' => $resume,
                 'user' => $user,
                 'userDetail' => $user->userDetail ?? new UserDetail(),
                 'educations' => $user->educations,
@@ -106,7 +147,6 @@ class ResumeController extends Controller
                 'skills' => $user->skills,
                 'certifications' => $user->certifications,
                 'languages' => $user->languages,
-                'mode' => 'preview'
             ]
         ]);
     }
@@ -115,10 +155,25 @@ class ResumeController extends Controller
     {
         $this->authorize('update', $resume);
         
+        // Force Modern Professional for now as requested
+        if ($resume->template_id != 1) {
+            $resume->update(['template_id' => 1]);
+        }
+
         $resume->load('template');
         $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
 
-        return view('resumes.edit', [
+        // Fetch user uploads from disk
+        $uploads = [];
+        $userId = auth()->id();
+        $files = Storage::disk('public')->files('uploads');
+        foreach ($files as $file) {
+            if (Str::startsWith(basename($file), $userId . '_')) {
+                $uploads[] = asset('storage/' . $file);
+            }
+        }
+
+        return \Inertia\Inertia::render('Resumes/Edit', [
             'resume' => $resume,
             'user' => $user,
             'userDetail' => $user->userDetail ?? new UserDetail(),
@@ -126,26 +181,58 @@ class ResumeController extends Controller
             'experiences' => $user->experiences,
             'skills' => $user->skills,
             'certifications' => $user->certifications,
-            'languages' => $user->languages
+            'languages' => $user->languages,
+            'userUploads' => $uploads
         ]);
     }
 
     public function exportCanvas(Resume $resume)
     {
         $this->authorize('view', $resume);
-        return view('resumes.export-canvas', compact('resume'));
+        $resume->load('template');
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+        
+        return \Inertia\Inertia::render('Resumes/Preview', [
+            'resume' => $resume,
+            'template_view' => $resume->template->blade_view, 
+            'mode' => 'preview',
+            'data' => [
+                'user' => $user,
+                'userDetail' => $user->userDetail ?? new UserDetail(),
+                'educations' => $user->educations,
+                'experiences' => $user->experiences,
+                'skills' => $user->skills,
+                'certifications' => $user->certifications,
+                'languages' => $user->languages,
+            ]
+        ]);
     }
 
     public function update(UpdateResumeRequest $request, Resume $resume)
     {
         $this->authorize('update', $resume);
 
-        $resume->update($request->validated());
+        $data = $request->validated();
+
+        // Explicitly handle canvas_state to ensure it's not missed by mass-assignment rules
+        if ($request->has('canvas_state')) {
+            $resume->canvas_state = $request->input('canvas_state');
+        }
+        
+        if ($request->has('title')) {
+            $resume->title = $request->input('title');
+        }
+
+        // Apply other validated data
+        $resume->fill(collect($data)->except(['canvas_state', 'title'])->toArray());
+
+        $saveResult = $resume->save();
 
         if ($request->wantsJson()) {
             return response()->json([
-                'message' => 'Resume updated successfully!',
-                'resume' => $resume
+                'message' => $saveResult ? 'Resume updated successfully!' : 'No changes detected or save failed.',
+                'resume' => $resume,
+                'status' => $saveResult
             ]);
         }
 

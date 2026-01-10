@@ -13,12 +13,12 @@ class TemplateController extends Controller
     public function index()
     {
         $templates = Template::latest()->get();
-        return view('admin.templates.index', compact('templates'));
+        return \Inertia\Inertia::render('Admin/Templates/Index', compact('templates'));
     }
 
     public function create()
     {
-        return view('admin.templates.create');
+        return \Inertia\Inertia::render('Admin/Templates/Form');
     }
 
     public function store(Request $request)
@@ -46,7 +46,7 @@ class TemplateController extends Controller
 
     public function edit(Template $template)
     {
-        return view('admin.templates.edit', compact('template'));
+        return \Inertia\Inertia::render('Admin/Templates/Form', compact('template'));
     }
 
     public function update(Request $request, Template $template)

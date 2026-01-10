@@ -22,7 +22,7 @@ class Resume extends Model
         'sections_order',
         'content_override',
         // Legacy/Direct columns if needed (can keep for backward compat or remove, but keeping ensures no breakage if code uses them)
-        'primary_color', 'font_family', 'font_size', 'sidebar_width', 'font_weight', 'custom_sections', 'canvas_state'
+        'primary_color', 'font_family', 'font_size', 'sidebar_width', 'font_weight', 'custom_sections', 'canvas_state', 'latex_source'
     ];
 
     protected $casts = [

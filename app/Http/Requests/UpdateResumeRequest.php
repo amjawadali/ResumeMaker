@@ -24,6 +24,7 @@ class UpdateResumeRequest extends FormRequest
             'custom_styling' => 'nullable|array',
             'content_override' => 'nullable|array',
             'sections_order' => 'nullable|array',
+            'latex_source' => 'nullable|string',
         ];
     }
 }

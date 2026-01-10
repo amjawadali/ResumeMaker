@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserDetailsController;
 use App\Http\Controllers\ResumeController;
+use App\Http\Controllers\ResumeSyncController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\TemplateController as AdminTemplateController;
@@ -40,6 +41,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/language', [UserDetailsController::class, 'storeLanguage'])->name('language.store');
         Route::put('/language/{language}', [UserDetailsController::class, 'updateLanguage'])->name('language.update');
         Route::delete('/language/{language}', [UserDetailsController::class, 'deleteLanguage'])->name('language.destroy');
+
+        Route::post('/upload-image', [UserDetailsController::class, 'uploadImage'])->name('upload-image');
     });
 
     Route::resource('resumes', ResumeController::class);
@@ -48,6 +51,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('resumes/{resume}/duplicate', [ResumeController::class, 'duplicate'])->name('resumes.duplicate');
     Route::get('resumes/{resume}/generate-pdf', [ResumeController::class, 'generatePdf'])->name('resumes.generate-pdf');
     Route::get('resumes/{resume}/download-pdf', [ResumeController::class, 'downloadPdf'])->name('resumes.download-pdf');
+
+    // Sync Bridge Routes (LaTeX <-> Canvas)
+    Route::post('resumes/{resume}/sync', [ResumeSyncController::class, 'sync'])->name('resumes.sync');
+    Route::post('resumes/{resume}/pull-latex', [ResumeSyncController::class, 'pullFromLatex'])->name('resumes.pull-latex');
 
     // Templates Browsing
     Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');

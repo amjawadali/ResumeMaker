@@ -22,6 +22,12 @@ class DashboardController extends Controller
         $recentResumes = Resume::with(['user', 'template'])->latest()->take(10)->get();
         $popularTemplates = Template::withCount('resumes')->orderBy('resumes_count', 'desc')->take(5)->get();
 
-        return view('admin.dashboard', compact('stats', 'recentUsers', 'recentResumes', 'popularTemplates'));
+        return \Inertia\Inertia::render('Admin/Dashboard', [
+            'stats' => array_merge($stats, [
+                'recent_users' => $recentUsers,
+                'recent_resumes' => $recentResumes,
+                'popular_templates' => $popularTemplates
+            ])
+        ]);
     }
 }

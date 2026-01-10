@@ -32,7 +32,7 @@ class UserDetailsController extends Controller
         $languages = $user->languages;
         $certifications = $user->certifications;
 
-        return view('user-details.index', compact(
+        return \Inertia\Inertia::render('UserDetails/Index', compact(
             'userDetail',
             'educations',
             'experiences',
@@ -235,5 +235,32 @@ class UserDetailsController extends Controller
         $language->delete();
         
         return redirect()->route('user-details.index')->with('success', 'Language deleted successfully!')->with('active_tab', 'languages');
+    }
+
+    public function uploadImage(Request $request)
+    {
+        $request->validate([
+            'profile_image' => 'required|image|max:10240', // 10MB
+        ]);
+
+        if ($request->hasFile('profile_image')) {
+            $image = $request->file('profile_image');
+            $userId = auth()->id();
+            $filename = $userId . '_' . time() . '_' . $image->getClientOriginalName();
+            $path = 'uploads/' . $filename;
+
+            if (!Storage::disk('public')->exists('uploads')) {
+                Storage::disk('public')->makeDirectory('uploads');
+            }
+
+            Storage::disk('public')->put($path, file_get_contents($image));
+            
+            return response()->json([
+                'url' => asset('storage/' . $path),
+                'path' => $path
+            ]);
+        }
+
+        return response()->json(['error' => 'No image uploaded'], 400);
     }
 }
