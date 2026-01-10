@@ -52,6 +52,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('resumes/{resume}/duplicate', [ResumeController::class, 'duplicate'])->name('resumes.duplicate');
     Route::get('resumes/{resume}/generate-pdf', [ResumeController::class, 'generatePdf'])->name('resumes.generate-pdf');
     Route::get('resumes/{resume}/download-pdf', [ResumeController::class, 'downloadPdf'])->name('resumes.download-pdf');
+    
+    // Versions History
+    Route::get('resumes/{resume}/versions', [ResumeController::class, 'getVersions'])->name('resumes.versions.index');
+    Route::post('resumes/{resume}/versions', [ResumeController::class, 'saveVersion'])->name('resumes.versions.store');
+    Route::post('resumes/versions/{version}/restore', [ResumeController::class, 'restoreVersion'])->name('resumes.versions.restore');
+    Route::delete('resumes/versions/{version}', [ResumeController::class, 'destroyVersion'])->name('resumes.versions.destroy');
 
     // Sync Bridge Routes (LaTeX <-> Canvas)
     Route::post('resumes/{resume}/sync', [ResumeSyncController::class, 'sync'])->name('resumes.sync');

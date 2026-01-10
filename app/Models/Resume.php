@@ -43,4 +43,9 @@ class Resume extends Model
     {
         return $this->belongsTo(Template::class);
     }
+
+    public function versions()
+    {
+        return $this->hasMany(ResumeVersion::class);
+    }
 }

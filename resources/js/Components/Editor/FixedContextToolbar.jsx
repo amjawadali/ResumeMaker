@@ -16,16 +16,26 @@ const FONT_FAMILIES = [
 
 const FONT_CATEGORIES = ['Handwriting', 'Corporate', 'Display', 'Headings', 'Paragraph', 'Sans-serif', 'Serif'];
 
-export default function FixedContextToolbar({ selection, selectedIds, elements = [], onSelect, onStyleChange, onAlign, onLayerAction, forceClose }) {
+export default function FixedContextToolbar({ selection, selectedIds, pages = [], onSelect, onStyleChange, onAlign, onLayerAction, forceClose }) {
+    const elements = pages.flatMap(p => p.elements);
     const [activePanel, setActivePanel] = useState(null); // 'position' | 'font' | null
     const [fontSearch, setFontSearch] = useState('');
     const [showTransparency, setShowTransparency] = useState(false);
+    const [showSpacing, setShowSpacing] = useState(false);
 
     useEffect(() => {
         if (forceClose > 0) {
             setActivePanel(null);
+            setShowTransparency(false);
+            setShowSpacing(false);
         }
     }, [forceClose]);
+
+    // Close popovers on selection change
+    useEffect(() => {
+        setShowTransparency(false);
+        setShowSpacing(false);
+    }, [selectedIds]);
 
     if (!selection || selectedIds.length === 0) return null;
 
@@ -108,7 +118,7 @@ export default function FixedContextToolbar({ selection, selectedIds, elements =
                     {/* Text Color */}
                     <div className="relative group ml-1">
                         <button className="flex flex-col items-center justify-center w-8 h-8 hover:bg-gray-100 rounded border border-transparent hover:border-gray-200">
-                            <Type size={16} className="text-gray-700" />
+                            <span className="text-base font-bold text-gray-700">A</span>
                             <div
                                 className="w-4 h-0.5 mt-0.5 rounded-full"
                                 style={{ backgroundColor: selection.fill || '#000000' }}
@@ -186,13 +196,28 @@ export default function FixedContextToolbar({ selection, selectedIds, elements =
                     {/* Transparency */}
                     <div className="relative">
                         <ToolbarButton
-                            icon={<div className="w-4 h-4 rounded-sm border border-gray-300" style={{ backgroundImage: 'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)', backgroundSize: '4px 4px', opacity: selection.opacity ?? 1 }} />}
-                            onClick={() => setShowTransparency(!showTransparency)}
+                            icon={
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <rect width="16" height="16" fill="white" />
+                                    <rect width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="8" width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="4" y="4" width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="12" y="4" width="4" height="4" fill="#D1D5DB" />
+                                    <rect y="8" width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="8" y="8" width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="4" y="12" width="4" height="4" fill="#D1D5DB" />
+                                    <rect x="12" y="12" width="4" height="4" fill="#D1D5DB" />
+                                </svg>
+                            }
+                            onClick={() => {
+                                setShowTransparency(!showTransparency);
+                                if (!showTransparency) setShowSpacing(false);
+                            }}
                             active={showTransparency}
                             tooltip="Transparency"
                         />
                         {showTransparency && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-3 z-50 w-48">
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-3 w-48" style={{ zIndex: 2 }}>
                                 <div className="flex items-center gap-3">
                                     <span className="text-xs font-medium text-gray-500">Opacity</span>
                                     <span className="text-xs font-bold text-gray-900 w-8">{Math.round((selection.opacity ?? 1) * 100)}%</span>
@@ -206,6 +231,63 @@ export default function FixedContextToolbar({ selection, selectedIds, elements =
                                     onChange={(e) => handleStyleChange('opacity', parseFloat(e.target.value))}
                                     className="w-full mt-2 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
                                 />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Spacing (Letter & Line) */}
+                    <div className="relative">
+                        <ToolbarButton
+                            icon={
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M11 5h2M11 19h2M11 12h2" />
+                                    <path d="M5 12h14" strokeWidth="1.5" />
+                                    <path d="M9 8l-2 4 2 4M15 8l2 4-2 4" />
+                                </svg>
+                            }
+                            onClick={() => {
+                                setShowSpacing(!showSpacing);
+                                if (!showSpacing) setShowTransparency(false);
+                            }}
+                            active={showSpacing}
+                            tooltip="Spacing"
+                        />
+                        {showSpacing && (
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-72" style={{ zIndex: 2 }}>
+                                {/* Letter Spacing */}
+                                <div className="mb-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-medium text-gray-700">Letter spacing</span>
+                                        <span className="text-xs font-bold text-gray-900 w-12 text-right">{Math.round(selection.letterSpacing || 0)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="-43"
+                                        max="200"
+                                        step="1"
+                                        value={selection.letterSpacing || 0}
+                                        onChange={(e) => handleStyleChange('letterSpacing', parseFloat(e.target.value))}
+                                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                    />
+                                </div>
+
+                                {/* Line Spacing */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-medium text-gray-700">Line spacing</span>
+                                        <span className="text-xs font-bold text-gray-900 w-12 text-right">{(selection.lineHeight || 1).toFixed(1)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="3"
+                                        step="0.1"
+                                        value={selection.lineHeight || 1}
+                                        onChange={(e) => handleStyleChange('lineHeight', parseFloat(e.target.value))}
+                                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                    />
+                                </div>
+
                             </div>
                         )}
                     </div>

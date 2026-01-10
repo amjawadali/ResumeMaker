@@ -19,7 +19,8 @@ export default function Edit({
     const [initialData, setInitialData] = useState(null);
 
     useEffect(() => {
-        if (resume.canvas_state && resume.canvas_state.elements) {
+        // Support both old 'elements' format and new multi-page 'pages' format
+        if (resume.canvas_state && (resume.canvas_state.pages || resume.canvas_state.elements)) {
             setInitialData(resume.canvas_state);
         } else {
             const template = createKonvaModernTemplate(userDetail, experiences, educations, skills, certifications, languages);

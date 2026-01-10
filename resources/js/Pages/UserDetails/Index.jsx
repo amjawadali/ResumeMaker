@@ -7,6 +7,8 @@ import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import Modal from '@/Components/Modal';
+import { toast } from 'sonner';
+import { confirmAction } from '@/Components/ConfirmDialog';
 
 export default function UserDetails({ auth, userDetail, educations, experiences, skills, certifications, languages }) {
     const [activeTab, setActiveTab] = useState('personal');
@@ -75,9 +77,18 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
     };
 
     // Generic delete handler
-    const handleDelete = (routeUrl) => {
-        if (confirm('Are you sure you want to delete this item?')) {
-            router.delete(routeUrl);
+    const handleDelete = async (routeUrl) => {
+        const confirmed = await confirmAction({
+            title: 'Delete Item?',
+            message: 'Are you sure you want to delete this item? This action cannot be undone.',
+            type: 'danger',
+            confirmText: 'Delete'
+        });
+
+        if (confirmed) {
+            router.delete(routeUrl, {
+                onSuccess: () => toast.success('Item deleted successfully')
+            });
         }
     };
 

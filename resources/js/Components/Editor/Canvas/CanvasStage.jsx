@@ -157,11 +157,13 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
 };
 
 const KonvaImage = ({ commonProps, src }) => {
-    const [img] = useImage(src);
+    const [img] = useImage(src, 'anonymous');
     return <Image image={img} {...commonProps} />;
 };
 
-const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction }, ref) => {
+import PageToolbar from './PageToolbar';
+
+const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction, showGrid, onPageAction, onUpdatePageTitle }, ref) => {
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [guides, setGuides] = useState([]);
@@ -173,16 +175,49 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
     const stageRef = useRef();
     const elementRefs = useRef({});
     const trRef = useRef();
-
     const PAGE_WIDTH = 595;
     const PAGE_HEIGHT = 842;
+    const PAGE_GAP = 60;
+
+    const allElements = pages.flatMap(p => p.elements);
+
+    // Track stage position for toolbars
+    const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        const updatePos = () => {
+            if (!stageRef.current) return;
+            setStagePos({ x: stageRef.current.x(), y: stageRef.current.y() });
+        };
+        const interval = setInterval(updatePos, 16);
+        return () => clearInterval(interval);
+    }, []);
+
 
     useImperativeHandle(ref, () => ({
         getStage: () => stageRef.current,
         zoomIn: () => handleManualZoom(1.1),
         zoomOut: () => handleManualZoom(1 / 1.1),
-        centerPage: () => centerPage()
+        centerPage: () => centerPage(),
+        fitToPage: () => fitToPage()
     }));
+
+    const fitToPage = useCallback(() => {
+        if (!containerRef.current) return;
+
+        const padding = 80; // Margin around the page
+        const availableWidth = containerRef.current.offsetWidth - padding;
+        const availableHeight = containerRef.current.offsetHeight - padding;
+
+        const scaleW = availableWidth / PAGE_WIDTH;
+        const scaleH = availableHeight / PAGE_HEIGHT;
+
+        const newScale = Math.min(scaleW, scaleH, 1.5); // Cap at 150%
+        onScaleChange(newScale);
+
+        // Center it after a frame to ensure state is applied
+        setTimeout(() => centerPage(newScale), 50);
+    }, [PAGE_WIDTH, PAGE_HEIGHT, onScaleChange]);
 
     const centerPage = useCallback((customScale) => {
         if (!stageRef.current || !containerRef.current) return;
@@ -270,12 +305,16 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
 
         trRef.current.nodes(nodes);
         trRef.current.getLayer().batchDraw();
-    }, [selectedIds, elements]);
+    }, [selectedIds, pages]);
 
     const handleSelect = (e, id) => {
         if (isHandMode) return;
 
         const isShift = e.evt.shiftKey;
+
+        // Check if the element belongs to a hidden or locked page
+        const parentPage = pages.find(p => p.elements.some(el => el.id === id));
+        if (parentPage?.hidden || parentPage?.locked) return;
 
         if (isShift) {
             if (selectedIds.includes(id)) {
@@ -298,12 +337,26 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
         const pointerPos = stage.getPointerPosition();
         if (!pointerPos) return;
 
-        const x = (pointerPos.x - stage.x()) / scale;
-        const y = (pointerPos.y - stage.y()) / scale;
-        const dropX = x;
-        const dropY = y;
+        // Global coordinates relative to stage (0,0)
+        const stageX = (pointerPos.x - stage.x()) / scale;
+        const stageY = (pointerPos.y - stage.y()) / scale;
 
-        // 1. Handle External File Drop (from computer)
+        // Find which page we're in
+        let targetPage = pages[0];
+        let localY = stageY;
+
+        pages.forEach((page, index) => {
+            const pageTop = index * (PAGE_HEIGHT + PAGE_GAP);
+            const pageBottom = pageTop + PAGE_HEIGHT;
+            if (stageY >= pageTop && stageY <= pageBottom) {
+                targetPage = page;
+                localY = stageY - pageTop;
+            }
+        });
+
+        if (targetPage.locked || targetPage.hidden) return;
+
+        // 1. Handle External File Drop
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
             if (file.type.startsWith('image/')) {
@@ -313,16 +366,16 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
                             src: url,
                             width: 200,
                             height: 200,
-                            x: dropX - 100,
-                            y: dropY - 100
-                        });
+                            x: stageX - 100,
+                            y: localY - 100
+                        }, targetPage.id);
                     }
                 });
             }
             return;
         }
 
-        // 2. Handle Internal Drag & Drop (from Sidebar)
+        // 2. Handle Internal Drag & Drop
         const type = e.dataTransfer.getData('type');
         let payload = {};
         try {
@@ -332,9 +385,9 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
         if (type) {
             onAddElementAt(type, {
                 ...payload,
-                x: dropX - (payload.width ? (payload.width / 2) : 0),
-                y: dropY - (payload.height ? (payload.height / 2) : 0)
-            });
+                x: stageX - (payload.width ? (payload.width / 2) : 50),
+                y: localY - (payload.height ? (payload.height / 2) : 50)
+            }, targetPage.id);
         }
     };
 
@@ -342,6 +395,7 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
         if (selectedIds.length > 1) return;
 
         const target = e.target;
+        const parentPage = target.getParent(); // This will be the Group for the page
         const newGuides = [];
         const snapThreshold = 5;
 
@@ -359,7 +413,14 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
             centerY: absY + itemHeight / 2,
         };
 
-        const others = elements
+        // Find elements on the same page
+        let pageElements = [];
+        pages.forEach(p => {
+            const hasElement = p.elements.some(el => el.id === selectedIds[0]);
+            if (hasElement) pageElements = p.elements;
+        });
+
+        const others = pageElements
             .filter(el => !selectedIds.includes(el.id))
             .map(el => ({
                 left: el.x,
@@ -437,11 +498,13 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
                 y: (pointer.y - stage.y()) / currentScale,
             };
 
-            // RESTRICTION: Only zoom if mouse is over the page area
-            const isOverPage = mousePointTo.x >= 0 && mousePointTo.x <= PAGE_WIDTH &&
-                mousePointTo.y >= 0 && mousePointTo.y <= PAGE_HEIGHT;
+            // RESTRICTION: Only zoom if mouse is over the page width area (ignoring gaps for better UX)
+            // Calculate total canvas height based on number of pages
+            const totalPagesHeight = pages.length * (PAGE_HEIGHT + PAGE_GAP);
+            const isOverCanvas = mousePointTo.x >= -50 && mousePointTo.x <= PAGE_WIDTH + 50 &&
+                mousePointTo.y >= -50 && mousePointTo.y <= totalPagesHeight;
 
-            if (!isOverPage) return;
+            if (!isOverCanvas) return;
 
             const scaleBy = 1.05;
             const oldScale = currentScale;
@@ -531,7 +594,7 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
         // Update position on drag/transform
         const interval = setInterval(calculatePosition, 16); // ~60fps
         return () => clearInterval(interval);
-    }, [selectedIds, elements, scale, dimensions, editingId, stageRef]);
+    }, [selectedIds, pages, scale, dimensions, editingId, stageRef]);
 
     return (
         <div
@@ -540,7 +603,8 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
             onDrop={handleDrop}
             ref={containerRef}
         >
-            <div className={`w-full h-full flex justify-center items-center transition-opacity duration-500 ${isInitialized ? 'opacity-100' : 'opacity-0'} ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+            <div className={`w-full h-full relative transition-opacity duration-500 ${isInitialized ? 'opacity-100' : 'opacity-0'} ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+
                 <Stage
                     width={dimensions.width || window.innerWidth}
                     height={dimensions.height || window.innerHeight}
@@ -556,60 +620,132 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
                     ref={stageRef}
                 >
                     <Layer>
-                        {/* Static Page Group */}
-                        <Group
-                            x={0}
-                            y={0}
-                            clip={{ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT }}
-                        >
-                            <Rect
-                                x={0} y={0} width={PAGE_WIDTH} height={PAGE_HEIGHT}
-                                fill="white"
-                                shadowColor="black" shadowBlur={20} shadowOpacity={0.1}
-                                onClick={() => !isHandMode && onSelect([])}
-                            />
+                        {pages.map((page, index) => {
+                            const pageY = index * (PAGE_HEIGHT + PAGE_GAP);
 
-                            {elements.map((el, i) => (
-                                <Element
-                                    key={el.id || i}
-                                    shapeProps={el}
-                                    onSelect={handleSelect}
-                                    onChange={(newAttrs) => onUpdateElement(el.id, newAttrs)}
-                                    onDragMove={handleDragMove}
-                                    onDragEnd={() => setGuides([])}
-                                    onStartEditing={() => !isHandMode && setEditingId(el.id)}
-                                    isEditing={editingId === el.id}
-                                    shapeRef={node => { elementRefs.current[el.id] = node; }}
-                                    isHandMode={isHandMode}
-                                />
-                            ))}
+                            return (
+                                <Group
+                                    key={page.id}
+                                    y={pageY}
+                                    opacity={page.hidden ? 0.3 : 1}
+                                >
+                                    {/* Page Background */}
+                                    <Rect
+                                        x={0} y={0} width={PAGE_WIDTH} height={PAGE_HEIGHT}
+                                        fill="white"
+                                        shadowColor="black" shadowBlur={20} shadowOpacity={0.1}
+                                        onClick={(e) => {
+                                            if (isHandMode || page.locked) return;
+                                            onSelect([]);
+                                        }}
+                                    />
 
-                            {guides.map((guide, i) => (
-                                <Line
-                                    key={i}
-                                    points={guide.orientation === 'V' ? [guide.x, 0, guide.x, PAGE_HEIGHT] : [0, guide.y, PAGE_WIDTH, guide.y]}
-                                    stroke="#7D2AE8"
-                                    strokeWidth={1 / scale}
-                                    dash={[4, 4]}
-                                    listening={false}
-                                />
-                            ))}
+                                    {/* Clip to page area */}
+                                    <Group clip={{ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT }}>
+                                        {page.elements.map((el, i) => (
+                                            <Element
+                                                key={el.id || i}
+                                                shapeProps={el}
+                                                onSelect={handleSelect}
+                                                onChange={(newAttrs) => onUpdateElement(el.id, newAttrs)}
+                                                onDragMove={handleDragMove}
+                                                onDragEnd={() => setGuides([])}
+                                                onStartEditing={() => !isHandMode && !page.locked && setEditingId(el.id)}
+                                                isEditing={editingId === el.id}
+                                                shapeRef={node => { elementRefs.current[el.id] = node; }}
+                                                isHandMode={isHandMode || page.locked || page.hidden}
+                                            />
+                                        ))}
+                                    </Group>
 
-                            <Transformer
-                                ref={trRef}
-                                flipEnabled={false}
-                                boundBoxFunc={(oldBox, newBox) => {
-                                    if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) return oldBox;
-                                    return newBox;
-                                }}
-                            />
-                        </Group>
+                                    {/* Page Specific Guides */}
+                                    {guides.map((guide, i) => (
+                                        <Line
+                                            key={i}
+                                            points={guide.orientation === 'V' ? [guide.x, 0, guide.x, PAGE_HEIGHT] : [0, guide.y, PAGE_WIDTH, guide.y]}
+                                            stroke="#7D2AE8"
+                                            strokeWidth={1 / scale}
+                                            dash={[4, 4]}
+                                            listening={false}
+                                        />
+                                    ))}
+
+                                    {/* Page Grid */}
+                                    {showGrid && (
+                                        <Group listening={false}>
+                                            {Array.from({ length: Math.ceil(PAGE_WIDTH / 50) + 1 }).map((_, i) => (
+                                                <Line
+                                                    key={`v-${Math.random()}`}
+                                                    points={[i * 50, 0, i * 50, PAGE_HEIGHT]}
+                                                    stroke="rgba(0,0,0,0.05)"
+                                                    strokeWidth={1 / scale}
+                                                />
+                                            ))}
+                                            {Array.from({ length: Math.ceil(PAGE_HEIGHT / 50) + 1 }).map((_, i) => (
+                                                <Line
+                                                    key={`h-${Math.random()}`}
+                                                    points={[0, i * 50, PAGE_WIDTH, i * 50]}
+                                                    stroke="rgba(0,0,0,0.05)"
+                                                    strokeWidth={1 / scale}
+                                                />
+                                            ))}
+                                        </Group>
+                                    )}
+
+                                    {/* Page Lock Overlay */}
+                                    {page.locked && (
+                                        <Rect
+                                            x={0} y={0} width={PAGE_WIDTH} height={PAGE_HEIGHT}
+                                            fill="rgba(0,0,0,0.02)"
+                                            listening={false}
+                                        />
+                                    )}
+                                </Group>
+                            );
+                        })}
+
+                        {/* Global Transformer */}
+                        <Transformer
+                            ref={trRef}
+                            flipEnabled={false}
+                            boundBoxFunc={(oldBox, newBox) => {
+                                if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) return oldBox;
+                                return newBox;
+                            }}
+                        />
                     </Layer>
                 </Stage>
 
+                {/* Multi-Page Toolbars - Placed after Stage for proper event handling */}
+                {isInitialized && pages.map((page, index) => (
+                    <PageToolbar
+                        key={page.id}
+                        pageNumber={index + 1}
+                        title={page.title}
+                        onTitleChange={(title) => onUpdatePageTitle(page.id, title)}
+                        onMoveUp={() => onPageAction(page.id, 'moveUp')}
+                        onMoveDown={() => onPageAction(page.id, 'moveDown')}
+                        onLock={() => onPageAction(page.id, 'lock')}
+                        onDuplicate={() => onPageAction(page.id, 'duplicate')}
+                        onDelete={() => onPageAction(page.id, 'delete')}
+                        onAddPage={() => onPageAction(page.id, 'add')}
+                        onHide={() => onPageAction(page.id, 'hide')}
+                        isLocked={page.locked}
+                        isHidden={page.hidden}
+                        style={{
+                            position: 'absolute',
+                            top: stagePos.y + (index * (PAGE_HEIGHT + PAGE_GAP)) * scale,
+                            left: stagePos.x,
+                            width: PAGE_WIDTH * scale,
+                            zIndex: 10,
+                            opacity: page.hidden ? 0.5 : 1,
+                        }}
+                    />
+                ))}
+
                 {editingId && (
                     <TextEditorOverlay
-                        element={elements.find(el => el.id === editingId)}
+                        element={allElements.find(el => el.id === editingId)}
                         scale={scale}
                         stage={stageRef.current}
                         containerWidth={dimensions.width}
@@ -626,11 +762,11 @@ const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateEleme
                 {popoverPosition && selectedIds.length > 0 && !editingId && (
                     <ElementPopover
                         position={popoverPosition}
-                        selection={elements.find(el => el.id === selectedIds[selectedIds.length - 1])}
+                        selection={allElements.find(el => el.id === selectedIds[selectedIds.length - 1])}
                         onDelete={onDelete}
                         onDuplicate={onDuplicate}
                         onLockToggle={() => {
-                            const selection = elements.find(el => el.id === selectedIds[selectedIds.length - 1]);
+                            const selection = allElements.find(el => el.id === selectedIds[selectedIds.length - 1]);
                             onUpdateElement(selectedIds, { locked: !selection?.locked });
                         }}
                         isMultiSelect={selectedIds.length > 1}

@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Plus, CheckCircle, FileText, BarChart, PenTool, Trash2 } from 'lucide-react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import ScaleFit from '@/Components/ScaleFit';
+import { toast } from 'sonner';
+import { confirmAction } from '@/Components/ConfirmDialog';
 
 export default function Dashboard({ auth, resumes, completion }) {
     const user = auth.user;
@@ -144,10 +146,19 @@ export default function Dashboard({ auth, resumes, completion }) {
                                             <PenTool size={16} /> Edit Resume
                                         </Link>
                                         <button
-                                            onClick={(e) => {
+                                            onClick={async (e) => {
                                                 e.preventDefault();
-                                                if (confirm('Are you sure you want to delete this resume?')) {
-                                                    router.delete(route('resumes.destroy', resume.id));
+                                                const confirmed = await confirmAction({
+                                                    title: 'Delete Resume?',
+                                                    message: 'Are you sure you want to delete this resume? This action cannot be undone.',
+                                                    type: 'danger',
+                                                    confirmText: 'Delete'
+                                                });
+
+                                                if (confirmed) {
+                                                    router.delete(route('resumes.destroy', resume.id), {
+                                                        onSuccess: () => toast.success('Resume deleted successfully')
+                                                    });
                                                 }
                                             }}
                                             className="w-full py-3 bg-white/5 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 border border-white/10 hover:border-red-500/30"

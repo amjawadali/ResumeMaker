@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Resume;
+use App\Models\ResumeVersion;
 use App\Models\Template;
 use App\Models\UserDetail;
 use App\Http\Requests\StoreResumeRequest;
@@ -317,5 +318,96 @@ class ResumeController extends Controller
         }
 
         return response()->download(storage_path('app/public/' . $resume->pdf_path));
+    }
+
+    public function getVersions(Resume $resume)
+    {
+        $this->authorize('view', $resume);
+        $versions = $resume->versions()->latest()->get();
+        return response()->json($versions);
+    }
+
+    public function saveVersion(Request $request, Resume $resume)
+    {
+        $this->authorize('update', $resume);
+        
+        $snapshotPath = null;
+        if ($request->has('snapshot') && !empty($request->snapshot)) {
+            try {
+                $imageData = $request->snapshot;
+                \Illuminate\Support\Facades\Log::info('Processing snapshot. Length: ' . strlen($imageData));
+                
+                if (strpos($imageData, ',') !== false) {
+                    $parts = explode(',', $imageData);
+                    $header = $parts[0];
+                    $data = $parts[1];
+                    
+                    $extension = 'png';
+                    if (preg_match('/image\/(\w+)/', $header, $matches)) {
+                        $extension = $matches[1];
+                    }
+                    
+                    $decodedData = base64_decode($data);
+                    if ($decodedData) {
+                        if (!Storage::disk('public')->exists('snapshots')) {
+                            Storage::disk('public')->makeDirectory('snapshots');
+                        }
+                        
+                        $filename = 'snapshots/' . Str::random(40) . '.' . $extension;
+                        Storage::disk('public')->put($filename, $decodedData);
+                        $snapshotPath = $filename;
+                        \Illuminate\Support\Facades\Log::info('Snapshot successfully saved: ' . $snapshotPath);
+                    } else {
+                        \Illuminate\Support\Facades\Log::error('Failed to decode base64 snapshot data');
+                    }
+                } else {
+                    \Illuminate\Support\Facades\Log::error('Snapshot data format invalid (missing comma)');
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Exception during snapshot saving: ' . $e->getMessage());
+            }
+        } else {
+            \Illuminate\Support\Facades\Log::warning('No snapshot data provided in saveVersion request');
+        }
+
+        $version = $resume->versions()->create([
+            'canvas_state' => $request->canvas_state,
+            'name' => $request->name ?? 'Version ' . now()->format('Y-m-d H:i:s'),
+            'snapshot_path' => $snapshotPath
+        ]);
+
+        return response()->json([
+            'message' => 'Version saved successfully!',
+            'version' => $version
+        ]);
+    }
+
+    public function destroyVersion(ResumeVersion $version)
+    {
+        $this->authorize('delete', $version->resume);
+
+        if ($version->snapshot_path) {
+            Storage::disk('public')->delete($version->snapshot_path);
+        }
+
+        $version->delete();
+
+        return response()->json([
+            'message' => 'Version deleted successfully!'
+        ]);
+    }
+
+    public function restoreVersion(ResumeVersion $version)
+    {
+        $this->authorize('update', $version->resume);
+
+        $resume = $version->resume;
+        $resume->canvas_state = $version->canvas_state;
+        $resume->save();
+
+        return response()->json([
+            'message' => 'Version restored successfully!',
+            'resume' => $resume
+        ]);
     }
 }

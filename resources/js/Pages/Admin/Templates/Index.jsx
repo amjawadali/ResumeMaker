@@ -1,15 +1,26 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { confirmAction } from '@/Components/ConfirmDialog';
 
 export default function Index({ templates }) {
     const toggleStatus = (id) => {
         router.post(route('admin.templates.toggle-active', id));
     };
 
-    const handleDelete = (id) => {
-        if (confirm('Are you sure you want to delete this template?')) {
-            router.delete(route('admin.templates.destroy', id));
+    const handleDelete = async (id) => {
+        const confirmed = await confirmAction({
+            title: 'Delete Template?',
+            message: 'Are you sure you want to delete this template? This action cannot be undone.',
+            type: 'danger',
+            confirmText: 'Delete'
+        });
+
+        if (confirmed) {
+            router.delete(route('admin.templates.destroy', id), {
+                onSuccess: () => toast.success('Template deleted successfully')
+            });
         }
     };
 

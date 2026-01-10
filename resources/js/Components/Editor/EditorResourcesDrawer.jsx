@@ -1,30 +1,163 @@
-import React, { useState } from 'react';
-import { X, Search, Image as ImageIcon, Type, Square, Upload, Loader2, Trash2, Circle, Triangle, Star, ArrowRight, Minus, Hexagon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Search, Image as ImageIcon, Type, Square, Upload, Loader2, Trash2, Circle, Triangle, Star, ArrowRight, Minus, Hexagon, History, RotateCcw, Plus } from 'lucide-react';
 
-export default function EditorResourcesDrawer({ activeTab, onAddElement, onUpload, onDeleteUpload, isUploading, userUploads = [], onClose }) {
+export default function EditorResourcesDrawer({
+    activeTab,
+    onAddElement,
+    onUpload,
+    onDeleteUpload,
+    isUploading,
+    userUploads = [],
+    onClose,
+    versions = [],
+    onSaveVersion,
+    onRestoreVersion,
+    onDeleteVersion
+}) {
     if (!activeTab) return null;
 
+    const [newVersionName, setNewVersionName] = useState('');
+    const drawerRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (drawerRef.current && !drawerRef.current.contains(event.target)) {
+                onClose();
+            }
+        };
+
+        if (activeTab) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [activeTab, onClose]);
+
     return (
-        <div className="fixed top-[64px] left-[72px] bottom-4 w-80 bg-[#18191B] border border-white/10 rounded-xl shadow-2xl flex flex-col z-[30] overflow-hidden animate-in slide-in-from-left duration-200">
+        <div ref={drawerRef} className={`fixed top-[64px] left-[72px] bottom-4 ${activeTab === 'history' ? 'w-[600px]' : 'w-80'} bg-[#18191B] border border-white/10 rounded-xl shadow-2xl flex flex-col z-[30] overflow-hidden transition-all duration-300 animate-in slide-in-from-left`}>
             <div className="p-4 flex items-center justify-between border-b border-white/5">
-                <h2 className="font-bold text-white capitalize">{activeTab}</h2>
+                <h2 className="font-bold text-white capitalize">{activeTab === 'history' ? 'Version History' : activeTab}</h2>
                 <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                     <X size={20} className="text-slate-400" />
                 </button>
             </div>
 
-            <div className="px-4 mb-4">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                    <input
-                        type="text"
-                        placeholder={`Search ${activeTab}...`}
-                        className="w-full bg-[#252627] border-none rounded-md py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-purple-500"
-                    />
+            {activeTab !== 'history' && (
+                <div className="px-4 mb-4 mt-4">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder={`Search ${activeTab}...`}
+                            className="w-full bg-[#252627] border-none rounded-md py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-purple-500 text-white"
+                        />
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="flex-1 overflow-y-auto scrollbar-hide p-4 pt-0 custom-scrollbar">
+                {activeTab === 'history' && (
+                    <div className="flex flex-col h-full">
+                        <div className="mb-6 space-y-3 pt-4">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={newVersionName}
+                                    onChange={(e) => setNewVersionName(e.target.value)}
+                                    placeholder="Enter version name..."
+                                    className="flex-1 bg-[#252627] border-white/5 rounded-md px-3 py-2 text-sm text-white focus:ring-1 focus:ring-purple-500"
+                                />
+                                <button
+                                    onClick={() => {
+                                        onSaveVersion(newVersionName);
+                                        setNewVersionName('');
+                                    }}
+                                    className="p-2 bg-purple-600 hover:bg-purple-500 rounded-md text-white transition-colors"
+                                    title="Save current state as a new version"
+                                >
+                                    <Plus size={20} />
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-gray-500 px-1 italic">
+                                Save the current canvas state to restore it later at any time.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between px-1">
+                                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Previous Versions</span>
+                                <span className="text-[10px] text-gray-500">{versions.length} versions</span>
+                            </div>
+
+                            {versions.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-10 text-center space-y-3 bg-[#252627]/30 rounded-xl border border-dashed border-white/5 mt-4">
+                                    <History size={32} className="text-gray-600" />
+                                    <p className="text-sm text-gray-500 px-6">No previous versions found. Save your first version above!</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-3 gap-4 pb-10">
+                                    {versions.map((v) => (
+                                        <div
+                                            key={v.id}
+                                            className="group bg-[#252627] hover:bg-[#2F3031] border border-white/5 rounded-[1.5rem] overflow-hidden transition-all duration-500 hover:shadow-2xl hover:shadow-purple-500/10"
+                                        >
+                                            {/* Visual Snapshot Card */}
+                                            <div className="aspect-[1/1.414] bg-[#18191B] relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-700">
+                                                {v.snapshot_path ? (
+                                                    <img
+                                                        src={`/storage/${v.snapshot_path}`}
+                                                        className="absolute inset-0 w-full h-full object-cover"
+                                                        alt={v.name}
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 gap-3 bg-[#18191B] border border-white/5 rounded-xl">
+                                                        <History size={24} className="opacity-20 animate-pulse" />
+                                                        <span className="text-[9px] uppercase font-black tracking-[0.2em] opacity-30 text-center px-6">Preview Unavailable</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Hover Overlay */}
+                                                <div className="absolute inset-0 bg-[#0E1318]/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all duration-400 flex flex-col items-center justify-center gap-2 p-3">
+                                                    <button
+                                                        onClick={() => onRestoreVersion(v.id)}
+                                                        className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-xl shadow-purple-900/40 transition-all active:scale-95"
+                                                    >
+                                                        <RotateCcw size={12} /> Restore
+                                                    </button>
+                                                    <button
+                                                        onClick={() => onDeleteVersion(v.id)}
+                                                        className="w-full py-2 bg-white/5 hover:bg-red-500/20 hover:text-red-400 text-white rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1.5 transition-all active:scale-95 border border-white/10 hover:border-red-500/30"
+                                                    >
+                                                        <Trash2 size={12} /> Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Details Section */}
+                                            <div className="p-3 bg-[#1C1C1E] border-t border-white/5 relative z-10">
+                                                <h4 className="text-[11px] font-bold text-white truncate group-hover:text-purple-400 transition-colors mb-1">
+                                                    {v.name || 'Untitled'}
+                                                </h4>
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-[9px] font-bold text-gray-500 flex items-center gap-1.5">
+                                                        <span className="w-1 h-1 rounded-full bg-purple-500" />
+                                                        {new Date(v.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                    </p>
+                                                    <p className="text-[9px] font-medium text-gray-600">
+                                                        {new Date(v.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {activeTab === 'text' && (
                     <div className="grid gap-3">
                         <button

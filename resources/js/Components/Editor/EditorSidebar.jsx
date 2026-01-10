@@ -15,6 +15,7 @@ export default function EditorSidebar({ activeTab, onTabChange }) {
                 <button
                     key={tab.id}
                     onClick={() => onTabChange(tab.id === activeTab ? null : tab.id)}
+                    onMouseEnter={() => onTabChange(tab.id)}
                     className={`w-full flex flex-col items-center justify-center py-3 gap-1.5 transition-all relative group ${activeTab === tab.id ? 'text-white' : 'text-slate-400 hover:text-white'}`}
                 >
                     {/* Active Indicator Line (Left) */}

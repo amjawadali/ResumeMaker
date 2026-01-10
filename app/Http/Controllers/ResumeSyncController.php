@@ -50,6 +50,50 @@ class ResumeSyncController extends Controller
 
         $resume->save();
 
+        // 3. Auto-save Version (Every 5 minutes)
+        $lastVersion = $resume->versions()
+            ->where('name', 'Auto-save')
+            ->latest()
+            ->first();
+
+        if (!$lastVersion || $lastVersion->created_at->diffInMinutes(now()) >= 5) {
+            $snapshotPath = null;
+            if ($request->has('snapshot') && !empty($request->snapshot)) {
+                try {
+                    $imageData = $request->snapshot;
+                    if (strpos($imageData, ',') !== false) {
+                        $parts = explode(',', $imageData);
+                        $header = $parts[0];
+                        $data = $parts[1];
+                        
+                        $extension = 'png';
+                        if (preg_match('/image\/(\w+)/', $header, $matches)) {
+                            $extension = $matches[1];
+                        }
+                        
+                        $decodedData = base64_decode($data);
+                        if ($decodedData) {
+                            if (!\Illuminate\Support\Facades\Storage::disk('public')->exists('snapshots')) {
+                                \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('snapshots');
+                            }
+                            
+                            $filename = 'snapshots/' . \Illuminate\Support\Str::random(40) . '.' . $extension;
+                            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $decodedData);
+                            $snapshotPath = $filename;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Silently fail snapshot save for auto-save
+                }
+            }
+            
+            $resume->versions()->create([
+                'canvas_state' => $validated['canvas_state'],
+                'name' => 'Auto-save',
+                'snapshot_path' => $snapshotPath,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Synced successfully',
             'latex_source' => $resume->latex_source,

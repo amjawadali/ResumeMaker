@@ -10,6 +10,9 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 // BUT to be safe and "React-like", we often do:
 // import { ZiggyVue } from '../../vendor/tightenco/ziggy/dist/vue.m';
 
+import { Toaster } from 'sonner';
+import ConfirmDialog from '@/Components/ConfirmDialog';
+
 const appName = window.document.getElementsByTagName('title')[0]?.innerText || 'Laravel';
 
 createInertiaApp({
@@ -17,7 +20,13 @@ createInertiaApp({
     resolve: (name) => resolvePageComponent(`./Pages/${name}.jsx`, import.meta.glob('./Pages/**/*.jsx')),
     setup({ el, App, props }) {
         const root = createRoot(el);
-        root.render(<App {...props} />);
+        root.render(
+            <>
+                <Toaster richColors position="bottom-right" />
+                <ConfirmDialog />
+                <App {...props} />
+            </>
+        );
     },
     progress: {
         color: '#4B5563',

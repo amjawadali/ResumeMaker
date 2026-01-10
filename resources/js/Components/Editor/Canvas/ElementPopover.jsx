@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Sparkles, Wand2, Copy, Trash2, Lock, Layers, AlignCenter, Link2, MoreHorizontal
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function ElementPopover({
     position,
@@ -29,7 +30,7 @@ export default function ElementPopover({
                 position: 'absolute',
                 left: position.x,
                 top: position.y - 12, // Small gap from the top edge
-                zIndex: 10000,
+                zIndex: 1,
                 transform: 'translate(-50%, -100%)', // Anchor bottom-center to the position
             }}
             className="flex items-center gap-1 bg-white rounded-lg shadow-lg border border-gray-200 px-1.5 py-1.5 select-none"
@@ -38,7 +39,9 @@ export default function ElementPopover({
             <PopoverButton
                 icon={<Sparkles size={16} className="text-blue-600" />}
                 label="Ask Canva"
-                onClick={() => alert('AI Magic features coming soon!')}
+                onClick={() => toast.info('AI Magic features coming soon!', {
+                    description: 'We are working hard to bring AI-powered design to you.'
+                })}
                 className="text-blue-600"
             />
 

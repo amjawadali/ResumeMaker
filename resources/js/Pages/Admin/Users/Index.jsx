@@ -1,11 +1,22 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { Trash2, User, Shield } from 'lucide-react';
+import { toast } from 'sonner';
+import { confirmAction } from '@/Components/ConfirmDialog';
 
 export default function Index({ users }) {
-    const handleDelete = (id) => {
-        if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-            router.delete(route('admin.users.destroy', id));
+    const handleDelete = async (id) => {
+        const confirmed = await confirmAction({
+            title: 'Delete User?',
+            message: 'Are you sure you want to delete this user? This action cannot be undone.',
+            type: 'danger',
+            confirmText: 'Delete'
+        });
+
+        if (confirmed) {
+            router.delete(route('admin.users.destroy', id), {
+                onSuccess: () => toast.success('User deleted successfully')
+            });
         }
     };
 
