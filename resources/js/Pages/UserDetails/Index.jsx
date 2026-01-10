@@ -5,6 +5,7 @@ import { User, GraduationCap, Briefcase, Zap, Award, Languages, Plus, Trash2, Ed
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
+import InputError from '@/Components/InputError';
 import Modal from '@/Components/Modal';
 
 export default function UserDetails({ auth, userDetail, educations, experiences, skills, certifications, languages }) {
@@ -196,6 +197,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('full_name', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
                                                 />
+                                                <InputError message={errorsPersonal.full_name} className="mt-2" />
                                             </div>
                                             <div>
                                                 <InputLabel value="Email" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
@@ -205,6 +207,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('email', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
                                                 />
+                                                <InputError message={errorsPersonal.email} className="mt-2" />
                                             </div>
                                             <div>
                                                 <InputLabel value="Phone" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
@@ -213,6 +216,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('phone', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
                                                 />
+                                                <InputError message={errorsPersonal.phone} className="mt-2" />
                                             </div>
                                             <div className="md:col-span-2">
                                                 <InputLabel value="Address" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
@@ -221,6 +225,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('address', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
                                                 />
+                                                <InputError message={errorsPersonal.address} className="mt-2" />
                                             </div>
                                             <div className="md:col-span-2">
                                                 <InputLabel value="Website / Portfolio" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
@@ -229,6 +234,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('website', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
                                                 />
+                                                <InputError message={errorsPersonal.website} className="mt-2" />
                                             </div>
                                             <div className="md:col-span-2">
                                                 <InputLabel value="Professional Summary" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
@@ -237,6 +243,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     onChange={e => setPersonalData('professional_summary', e.target.value)}
                                                     className="block w-full rounded-xl border-white/10 bg-white/5 min-h-[120px] p-4 text-sm font-medium text-white focus:border-purple-500 focus:ring-purple-500 bg-transparent"
                                                 />
+                                                <InputError message={errorsPersonal.professional_summary} className="mt-2" />
                                             </div>
                                         </div>
                                         <div className="flex justify-end pt-6">
@@ -440,7 +447,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
 
 // Sub-components for Forms to keep main file clean-ish
 function EducationForm({ onSuccess }) {
-    const { data, setData, post, processing } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         institution: '', degree: '', start_date: '', end_date: '', currently_studying: false, description: ''
     });
 
@@ -451,11 +458,27 @@ function EducationForm({ onSuccess }) {
 
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div><InputLabel value="Institution" /><TextInput value={data.institution} onChange={e => setData('institution', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-            <div><InputLabel value="Degree" /><TextInput value={data.degree} onChange={e => setData('degree', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+            <div>
+                <InputLabel value="Institution" />
+                <TextInput value={data.institution} onChange={e => setData('institution', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.institution} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Degree" />
+                <TextInput value={data.degree} onChange={e => setData('degree', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.degree} className="mt-2" />
+            </div>
             <div className="grid grid-cols-2 gap-4">
-                <div><InputLabel value="Start Date" /><TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-                <div><InputLabel value="End Date" /><TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+                <div>
+                    <InputLabel value="Start Date" />
+                    <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.start_date} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="End Date" />
+                    <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.end_date} className="mt-2" />
+                </div>
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>
@@ -463,7 +486,7 @@ function EducationForm({ onSuccess }) {
 }
 
 function ExperienceForm({ onSuccess }) {
-    const { data, setData, post, processing } = useForm({
+    const { data, setData, post, processing, errors } = useForm({
         company: '', position: '', start_date: '', end_date: '', currently_working: false, location: '', responsibilities: ''
     });
 
@@ -474,11 +497,27 @@ function ExperienceForm({ onSuccess }) {
 
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div><InputLabel value="Company" /><TextInput value={data.company} onChange={e => setData('company', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-            <div><InputLabel value="Position" /><TextInput value={data.position} onChange={e => setData('position', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+            <div>
+                <InputLabel value="Company" />
+                <TextInput value={data.company} onChange={e => setData('company', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.company} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Position" />
+                <TextInput value={data.position} onChange={e => setData('position', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.position} className="mt-2" />
+            </div>
             <div className="grid grid-cols-2 gap-4">
-                <div><InputLabel value="Start Date" /><TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-                <div><InputLabel value="End Date" /><TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+                <div>
+                    <InputLabel value="Start Date" />
+                    <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.start_date} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="End Date" />
+                    <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.end_date} className="mt-2" />
+                </div>
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>
@@ -486,16 +525,21 @@ function ExperienceForm({ onSuccess }) {
 }
 
 function SkillForm({ onSuccess }) {
-    const { data, setData, post, processing } = useForm({ name: '', level: 'Intermediate' });
+    const { data, setData, post, processing, errors } = useForm({ name: '', level: 'Intermediate' });
     const submit = (e) => { e.preventDefault(); post(route('user-details.skill.store'), { onSuccess }); };
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div><InputLabel value="Skill Name" /><TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+            <div>
+                <InputLabel value="Skill Name" />
+                <TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.name} className="mt-2" />
+            </div>
             <div>
                 <InputLabel value="Level" />
                 <select value={data.level} onChange={e => setData('level', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3">
                     <option>Beginner</option><option>Intermediate</option><option>Advanced</option><option>Expert</option>
                 </select>
+                <InputError message={errors.level} className="mt-2" />
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>
@@ -503,15 +547,31 @@ function SkillForm({ onSuccess }) {
 }
 
 function CertificationForm({ onSuccess }) {
-    const { data, setData, post, processing } = useForm({ name: '', issuing_organization: '', issue_date: '', expiration_date: '', credential_id: '', credential_url: '' });
+    const { data, setData, post, processing, errors } = useForm({ name: '', issuing_organization: '', issue_date: '', expiration_date: '', credential_id: '', credential_url: '' });
     const submit = (e) => { e.preventDefault(); post(route('user-details.certification.store'), { onSuccess }); };
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div><InputLabel value="Certification Name" /><TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-            <div><InputLabel value="Issuing Org" /><TextInput value={data.issuing_organization} onChange={e => setData('issuing_organization', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+            <div>
+                <InputLabel value="Certification Name" />
+                <TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.name} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Issuing Org" />
+                <TextInput value={data.issuing_organization} onChange={e => setData('issuing_organization', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.issuing_organization} className="mt-2" />
+            </div>
             <div className="grid grid-cols-2 gap-4">
-                <div><InputLabel value="Issue Date" /><TextInput type="date" value={data.issue_date} onChange={e => setData('issue_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
-                <div><InputLabel value="Expiration Date" /><TextInput type="date" value={data.expiration_date} onChange={e => setData('expiration_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+                <div>
+                    <InputLabel value="Issue Date" />
+                    <TextInput type="date" value={data.issue_date} onChange={e => setData('issue_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.issue_date} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="Expiration Date" />
+                    <TextInput type="date" value={data.expiration_date} onChange={e => setData('expiration_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.expiration_date} className="mt-2" />
+                </div>
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>
@@ -519,16 +579,21 @@ function CertificationForm({ onSuccess }) {
 }
 
 function LanguageForm({ onSuccess }) {
-    const { data, setData, post, processing } = useForm({ name: '', proficiency: 'Intermediate' });
+    const { data, setData, post, processing, errors } = useForm({ name: '', proficiency: 'Intermediate' });
     const submit = (e) => { e.preventDefault(); post(route('user-details.language.store'), { onSuccess }); };
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div><InputLabel value="Language" /><TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" /></div>
+            <div>
+                <InputLabel value="Language" />
+                <TextInput value={data.name} onChange={e => setData('name', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.name} className="mt-2" />
+            </div>
             <div>
                 <InputLabel value="Proficiency" />
                 <select value={data.proficiency} onChange={e => setData('proficiency', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3">
                     <option>Native</option><option>Fluent</option><option>Intermediate</option><option>Basic</option>
                 </select>
+                <InputError message={errors.proficiency} className="mt-2" />
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>

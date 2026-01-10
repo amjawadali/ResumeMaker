@@ -1,175 +1,350 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { Stage, Layer, Rect, Text, Image, Transformer, Line } from 'react-konva';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { Stage, Layer, Rect, Text, Image, Transformer, Line, Group, Ellipse, Star, Arrow, RegularPolygon } from 'react-konva';
 import useImage from 'use-image';
+import ElementPopover from './ElementPopover';
 
 const ELEMENT_TYPES = {
     TEXT: 'text',
     IMAGE: 'image',
-    SHAPE: 'rect',
+    rect: 'rect',
+    circle: 'circle',
+    star: 'star',
+    arrow: 'arrow',
+    line: 'line',
+    triangle: 'triangle',
+    polygon: 'polygon',
 };
 
-const Element = ({ shapeProps, isSelected, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing }) => {
-    const shapeRef = useRef();
-    const trRef = useRef();
+const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing, shapeRef, isHandMode }) => {
 
-    useEffect(() => {
-        if (isSelected) {
-            // we need to attach transformer manually
-            trRef.current.nodes([shapeRef.current]);
-            trRef.current.getLayer().batchDraw();
+    // Common props for all shapes
+    const commonProps = {
+        onClick: (e) => onSelect(e, shapeProps.id),
+        onTap: (e) => onSelect(e, shapeProps.id),
+        ref: shapeRef,
+        ...shapeProps,
+        draggable: !isEditing && !isHandMode && !shapeProps.locked,
+        onDragMove,
+        onDragEnd: (e) => {
+            onChange({
+                ...shapeProps,
+                x: e.target.x(),
+                y: e.target.y(),
+                rotation: e.target.rotation(),
+            });
+            onDragEnd(); // for guides cleanup
+        },
+        onTransformEnd: (e) => {
+            const node = shapeRef.current;
+            const scaleX = node.scaleX();
+            const scaleY = node.scaleY();
+            node.scaleX(1);
+            node.scaleY(1);
+
+            onChange({
+                ...shapeProps,
+                x: node.x(),
+                y: node.y(),
+                width: Math.max(5, node.width() * scaleX),
+                height: Math.max(5, node.height() * scaleY),
+                rotation: node.rotation(),
+            });
         }
-    }, [isSelected]);
-
-    const handleDragEndInternal = (e) => {
-        onChange({
-            ...shapeProps,
-            x: e.target.x(),
-            y: e.target.y(),
-            rotation: e.target.rotation(),
-        });
-        onDragEnd();
-    };
-
-    const handleTransformEnd = (e) => {
-        // transformer is changing scale of the node
-        // so we need to update state
-        const node = shapeRef.current;
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-
-        // we will reset it back
-        node.scaleX(1);
-        node.scaleY(1);
-
-        onChange({
-            ...shapeProps,
-            x: node.x(),
-            y: node.y(),
-            // set minimal value
-            width: Math.max(5, node.width() * scaleX),
-            height: Math.max(5, node.height() * scaleY),
-            rotation: node.rotation(),
-        });
     };
 
     if (shapeProps.type === ELEMENT_TYPES.TEXT) {
+        let textContent = shapeProps.text;
+
+        // Handle visual text transformation
+        if (shapeProps.textTransform === 'uppercase') {
+            textContent = textContent?.toUpperCase() || '';
+        }
+
+        // Handle list capability (visual only for non-editing)
+        if (shapeProps.listType === 'bullet') {
+            // Split lines and add bullets
+            textContent = (textContent || '').split('\n').map(line => `• ${line}`).join('\n');
+        }
+
         return (
-            <EditableText
-                shapeProps={shapeProps}
-                isSelected={isSelected}
-                onSelect={onSelect}
-                onChange={onChange}
-                onDragMove={onDragMove}
-                onDragEnd={handleDragEndInternal}
-                onStartEditing={onStartEditing}
-                isEditing={isEditing}
-                shapeRef={shapeRef}
-                trRef={trRef}
+            <Text
+                {...commonProps}
+                text={textContent} // Override text prop for visual rendering
+                onDblClick={onStartEditing}
+                onDblTap={onStartEditing}
+                visible={!isEditing}
+                onTransformEnd={(e) => {
+                    const node = shapeRef.current;
+                    const scaleX = node.scaleX();
+                    const scaleY = node.scaleY();
+                    node.scaleX(1);
+                    node.scaleY(1);
+                    onChange({
+                        ...shapeProps,
+                        x: node.x(),
+                        y: node.y(),
+                        fontSize: Math.max(5, Math.round(node.fontSize() * scaleY)),
+                        width: Math.max(5, node.width() * scaleX),
+                        rotation: node.rotation(),
+                    });
+                }}
             />
         );
     }
 
     if (shapeProps.type === ELEMENT_TYPES.IMAGE) {
-        // Image handling is a bit complex with useImage
-        return <KonvaImage shapeProps={shapeProps} isSelected={isSelected} onSelect={onSelect} onChange={onChange} onDragMove={onDragMove} onDragEnd={handleDragEndInternal} shapeRef={shapeRef} trRef={trRef} handleDragEndInternal={handleDragEndInternal} handleTransformEnd={handleTransformEnd} />;
+        return <KonvaImage commonProps={commonProps} src={shapeProps.src} />;
     }
 
-    return (
-        <React.Fragment>
-            <Rect
-                onClick={onSelect}
-                onTap={onSelect}
-                ref={shapeRef}
-                {...shapeProps}
-                draggable
-                onDragMove={onDragMove}
-                onDragEnd={handleDragEndInternal}
-                onTransformEnd={handleTransformEnd}
+    if (shapeProps.type === 'circle') {
+        return <Ellipse {...commonProps} radiusX={shapeProps.width / 2} radiusY={shapeProps.height / 2} />;
+    }
+
+    if (shapeProps.type === 'star') {
+        return (
+            <Star
+                {...commonProps}
+                numPoints={5}
+                innerRadius={shapeProps.width / 4}
+                outerRadius={shapeProps.width / 2}
             />
-            {isSelected && (
-                <Transformer
-                    ref={trRef}
-                    flipEnabled={false}
-                    boundBoxFunc={(oldBox, newBox) => {
-                        if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
-                            return oldBox;
-                        }
-                        return newBox;
-                    }}
-                />
-            )}
-        </React.Fragment>
-    );
+        );
+    }
+
+    if (shapeProps.type === 'arrow') {
+        // Arrow points from (0,0) to (width, 0)
+        return (
+            <Arrow
+                {...commonProps}
+                points={[0, 0, shapeProps.width, 0]}
+                pointerLength={10}
+                pointerWidth={10}
+            />
+        );
+    }
+
+    if (shapeProps.type === 'line') {
+        return (
+            <Line
+                {...commonProps}
+                points={[0, 0, shapeProps.width, 0]}
+                strokeWidth={5}
+            />
+        );
+    }
+
+    if (shapeProps.type === 'triangle') {
+        return (
+            <RegularPolygon
+                {...commonProps}
+                sides={3}
+                radius={shapeProps.width / 2}
+            />
+        );
+    }
+
+    if (shapeProps.type === 'polygon') {
+        return (
+            <RegularPolygon
+                {...commonProps}
+                sides={6}
+                radius={shapeProps.width / 2}
+            />
+        );
+    }
+
+    return <Rect {...commonProps} />;
 };
 
-const KonvaImage = ({ shapeProps, isSelected, onSelect, onChange, onDragMove, onDragEnd, shapeRef, trRef, handleDragEndInternal, handleTransformEnd }) => {
-    const [img] = useImage(shapeProps.src);
-    return (
-        <React.Fragment>
-            <Image
-                image={img}
-                onClick={onSelect}
-                onTap={onSelect}
-                ref={shapeRef}
-                {...shapeProps}
-                draggable
-                onDragMove={onDragMove}
-                onDragEnd={onDragEnd}
-                onTransformEnd={handleTransformEnd}
-            />
-            {isSelected && (
-                <Transformer
-                    ref={trRef}
-                    flipEnabled={false}
-                    boundBoxFunc={(oldBox, newBox) => {
-                        if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) {
-                            return oldBox;
-                        }
-                        return newBox;
-                    }}
-                />
-            )}
-        </React.Fragment>
-    );
+const KonvaImage = ({ commonProps, src }) => {
+    const [img] = useImage(src);
+    return <Image image={img} {...commonProps} />;
 };
 
-export default function CanvasStage({ elements, selectedId, onSelect, onUpdateElement, onAddElementAt, scale = 1, onScaleChange, stageRef }) {
+const CanvasStage = forwardRef(({ elements, selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction }, ref) => {
     const containerRef = useRef();
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [guides, setGuides] = useState([]);
     const [editingId, setEditingId] = useState(null);
+    const [popoverPosition, setPopoverPosition] = useState(null);
+    const [isScrolling, setIsScrolling] = useState(false);
+    const [isInitialized, setIsInitialized] = useState(false);
+    const scrollTimeoutRef = useRef(null);
+    const stageRef = useRef();
+    const elementRefs = useRef({});
+    const trRef = useRef();
 
     const PAGE_WIDTH = 595;
     const PAGE_HEIGHT = 842;
 
+    useImperativeHandle(ref, () => ({
+        getStage: () => stageRef.current,
+        zoomIn: () => handleManualZoom(1.1),
+        zoomOut: () => handleManualZoom(1 / 1.1),
+        centerPage: () => centerPage()
+    }));
+
+    const centerPage = useCallback((customScale) => {
+        if (!stageRef.current || !containerRef.current) return;
+        const stage = stageRef.current;
+        const container = containerRef.current;
+
+        const containerWidth = container.offsetWidth;
+        if (containerWidth === 0) return;
+
+        // Use scale from argument if provided, otherwise fallback to local scale state
+        const targetScale = customScale || scale;
+
+        // Calculate centered X position
+        const newX = (containerWidth / 2) - (PAGE_WIDTH * targetScale / 2);
+        const newY = 50; // Fixed top margin
+
+        stage.position({ x: newX, y: newY });
+        stage.batchDraw();
+    }, [scale, PAGE_WIDTH]);
+
+    // Initial centering - ONLY triggers when dimensions are first captured
+    useEffect(() => {
+        if (dimensions.width > 0 && !isInitialized) {
+            // Use a slight timeout to ensure Konva has fully mounted
+            const timeout = setTimeout(() => {
+                centerPage(scale);
+                setIsInitialized(true);
+            }, 50);
+            return () => clearTimeout(timeout);
+        }
+    }, [dimensions.width, isInitialized]); // Removed centerPage dependency to prevent scale reactivity
+
+    const handleManualZoom = (factor) => {
+        const stage = stageRef.current;
+        const oldScale = scale;
+        const newScale = Math.max(0.05, Math.min(5, oldScale * factor));
+
+        if (newScale !== oldScale) {
+            const center = {
+                x: dimensions.width / 2,
+                y: dimensions.height / 2
+            };
+
+            const mousePointTo = {
+                x: (center.x - stage.x()) / oldScale,
+                y: (center.y - stage.y()) / oldScale,
+            };
+
+            onScaleChange(newScale);
+
+            const newPos = {
+                x: center.x - mousePointTo.x * newScale,
+                y: center.y - mousePointTo.y * newScale,
+            };
+
+            stage.position(newPos);
+            stage.batchDraw();
+        }
+    };
+
+    useEffect(() => {
+        const updateDimensions = () => {
+            if (containerRef.current) {
+                setDimensions({
+                    width: containerRef.current.offsetWidth,
+                    height: containerRef.current.offsetHeight
+                });
+            }
+        };
+
+        window.addEventListener('resize', updateDimensions);
+        updateDimensions();
+        // Force update on mount
+        setTimeout(updateDimensions, 100);
+
+        return () => window.removeEventListener('resize', updateDimensions);
+    }, []);
+
+    useEffect(() => {
+        if (!trRef.current) return;
+
+        const nodes = selectedIds
+            .map(id => elementRefs.current[id])
+            .filter(node => node !== undefined);
+
+        trRef.current.nodes(nodes);
+        trRef.current.getLayer().batchDraw();
+    }, [selectedIds, elements]);
+
+    const handleSelect = (e, id) => {
+        if (isHandMode) return;
+
+        const isShift = e.evt.shiftKey;
+
+        if (isShift) {
+            if (selectedIds.includes(id)) {
+                onSelect(selectedIds.filter(sid => sid !== id));
+            } else {
+                onSelect([...selectedIds, id]);
+            }
+        } else {
+            if (!selectedIds.includes(id)) {
+                onSelect([id]);
+            }
+        }
+        e.cancelBubble = true;
+    };
+
     const handleDrop = (e) => {
         e.preventDefault();
         stageRef.current.setPointersPositions(e);
-
-        const type = e.dataTransfer.getData('type');
-        const payload = JSON.parse(e.dataTransfer.getData('payload'));
-
-        // Use the stage's scale to find the actual point in the coordinate system
         const stage = stageRef.current;
         const pointerPos = stage.getPointerPosition();
+        if (!pointerPos) return;
 
-        // Convert screen coordinates (px) to stage units (A4 points)
-        const x = pointerPos.x / scale;
-        const y = pointerPos.y / scale;
+        const x = (pointerPos.x - stage.x()) / scale;
+        const y = (pointerPos.y - stage.y()) / scale;
+        const dropX = x;
+        const dropY = y;
 
-        onAddElementAt(type, {
-            ...payload,
-            x: x - (payload.width ? (payload.width / 2) : 0),
-            y: y - (payload.height ? (payload.height / 2) : 0)
-        });
+        // 1. Handle External File Drop (from computer)
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('image/')) {
+                onUpload(file, false).then(url => {
+                    if (url) {
+                        onAddElementAt('image', {
+                            src: url,
+                            width: 200,
+                            height: 200,
+                            x: dropX - 100,
+                            y: dropY - 100
+                        });
+                    }
+                });
+            }
+            return;
+        }
+
+        // 2. Handle Internal Drag & Drop (from Sidebar)
+        const type = e.dataTransfer.getData('type');
+        let payload = {};
+        try {
+            payload = JSON.parse(e.dataTransfer.getData('payload'));
+        } catch (err) { }
+
+        if (type) {
+            onAddElementAt(type, {
+                ...payload,
+                x: dropX - (payload.width ? (payload.width / 2) : 0),
+                y: dropY - (payload.height ? (payload.height / 2) : 0)
+            });
+        }
     };
 
     const handleDragMove = (e) => {
+        if (selectedIds.length > 1) return;
+
         const target = e.target;
-        const stage = target.getStage();
         const newGuides = [];
         const snapThreshold = 5;
 
-        // Current item's bounds
         const itemWidth = target.width() * target.scaleX();
         const itemHeight = target.height() * target.scaleY();
         const absX = target.x();
@@ -184,9 +359,8 @@ export default function CanvasStage({ elements, selectedId, onSelect, onUpdateEl
             centerY: absY + itemHeight / 2,
         };
 
-        // All other elements + Page
         const others = elements
-            .filter(el => el.id !== selectedId)
+            .filter(el => !selectedIds.includes(el.id))
             .map(el => ({
                 left: el.x,
                 right: el.x + el.width,
@@ -196,30 +370,21 @@ export default function CanvasStage({ elements, selectedId, onSelect, onUpdateEl
                 centerY: el.y + el.height / 2,
             }));
 
-        // Add page centers
         others.push({
-            left: 0,
-            right: PAGE_WIDTH,
-            top: 0,
-            bottom: PAGE_HEIGHT,
-            centerX: PAGE_WIDTH / 2,
-            centerY: PAGE_HEIGHT / 2,
+            left: 0, right: PAGE_WIDTH, top: 0, bottom: PAGE_HEIGHT,
+            centerX: PAGE_WIDTH / 2, centerY: PAGE_HEIGHT / 2,
         });
 
         let snappedX = absX;
         let snappedY = absY;
-
         let guidesFoundX = false;
         let guidesFoundY = false;
 
         others.forEach(obj => {
-            // Vertical Guides (Aligning X)
             const snapPointsX = [
                 { guide: obj.left, item: itemBounds.left, snap: obj.left },
                 { guide: obj.right, item: itemBounds.right, snap: obj.right - itemWidth },
                 { guide: obj.centerX, item: itemBounds.centerX, snap: obj.centerX - itemWidth / 2 },
-                { guide: obj.left, item: itemBounds.right, snap: obj.left - itemWidth },
-                { guide: obj.right, item: itemBounds.left, snap: obj.right },
             ];
 
             snapPointsX.forEach(p => {
@@ -230,13 +395,10 @@ export default function CanvasStage({ elements, selectedId, onSelect, onUpdateEl
                 }
             });
 
-            // Horizontal Guides (Aligning Y)
             const snapPointsY = [
                 { guide: obj.top, item: itemBounds.top, snap: obj.top },
                 { guide: obj.bottom, item: itemBounds.bottom, snap: obj.bottom - itemHeight },
                 { guide: obj.centerY, item: itemBounds.centerY, snap: obj.centerY - itemHeight / 2 },
-                { guide: obj.top, item: itemBounds.bottom, snap: obj.top - itemHeight },
-                { guide: obj.bottom, item: itemBounds.top, snap: obj.bottom },
             ];
 
             snapPointsY.forEach(p => {
@@ -253,124 +415,244 @@ export default function CanvasStage({ elements, selectedId, onSelect, onUpdateEl
         setGuides(newGuides);
     };
 
-    const handleDragEnd = () => {
-        setGuides([]);
-    };
-
     const handleWheel = (e) => {
-        // Only zoom if Ctrl is pressed (standard for pinch-to-zoom on touchpads)
+        e.evt.preventDefault();
+        const stage = e.target.getStage();
+
+        // Handle scrolling state for popover visibility
+        setIsScrolling(true);
+        if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = setTimeout(() => setIsScrolling(false), 200);
+
         if (e.evt.ctrlKey) {
-            e.evt.preventDefault();
-
-            const scaleBy = 1.05;
+            // Precise Zoom to Cursor
             const stage = e.target.getStage();
-            const oldScale = scale;
-
             const pointer = stage.getPointerPosition();
 
+            // Use direct stage scale to avoid transition lag
+            const currentScale = stage.scaleX();
+
             const mousePointTo = {
-                x: (pointer.x - stage.x()) / oldScale,
-                y: (pointer.y - stage.y()) / oldScale,
+                x: (pointer.x - stage.x()) / currentScale,
+                y: (pointer.y - stage.y()) / currentScale,
             };
 
-            const direction = e.evt.deltaY > 0 ? -1 : 1;
-            const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+            // RESTRICTION: Only zoom if mouse is over the page area
+            const isOverPage = mousePointTo.x >= 0 && mousePointTo.x <= PAGE_WIDTH &&
+                mousePointTo.y >= 0 && mousePointTo.y <= PAGE_HEIGHT;
 
-            // Constrain zoom
-            if (newScale >= 0.1 && newScale <= 3) {
+            if (!isOverPage) return;
+
+            const scaleBy = 1.05;
+            const oldScale = currentScale;
+
+            const direction = e.evt.deltaY > 0 ? -1 : 1;
+            let newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+            newScale = Math.max(0.05, Math.min(5, newScale));
+
+            if (newScale !== oldScale) {
+                // Immediate stage update for smooth anchoring
+                stage.scale({ x: newScale, y: newScale });
+
+                const newPos = {
+                    x: pointer.x - mousePointTo.x * newScale,
+                    y: pointer.y - mousePointTo.y * newScale,
+                };
+                stage.position(newPos);
+                stage.batchDraw();
+
                 onScaleChange(newScale);
             }
+        } else if (e.evt.shiftKey) {
+            // Pan logic (Horizontal - Shift + Wheel)
+            // Map deltaY to X for horizontal wheel scroll
+            const dx = -e.evt.deltaY;
+            stage.x(stage.x() + dx);
+        } else if (isHandMode) {
+            // Pan logic (Vertical - Space + Wheel)
+            const dy = -e.evt.deltaY;
+            stage.y(stage.y() + dy);
+        } else {
+            // Normal Pan logic (Default)
+            const dx = -e.evt.deltaX;
+            const dy = -e.evt.deltaY;
+            stage.position({
+                x: stage.x() + dx,
+                y: stage.y() + dy,
+            });
         }
     };
 
+    // Calculate Popover Position
+    useEffect(() => {
+        if (selectedIds.length === 0 || !stageRef.current || editingId) {
+            setPopoverPosition(null);
+            return;
+        }
+
+        const calculatePosition = () => {
+            if (!stageRef.current) return;
+
+            let rect = null;
+
+            // Try using Transformer's rect first (most accurate for combined selection)
+            if (trRef.current && selectedIds.length > 0) {
+                rect = trRef.current.getClientRect();
+            }
+
+            // Fallback to individual element bounding box if transformer rect is zero or not ready
+            if (!rect || rect.width === 0) {
+                const nodes = selectedIds
+                    .map(id => elementRefs.current[id])
+                    .filter(node => !!node);
+
+                if (nodes.length === 0) return;
+
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                nodes.forEach(node => {
+                    const r = node.getClientRect();
+                    minX = Math.min(minX, r.x);
+                    minY = Math.min(minY, r.y);
+                    maxX = Math.max(maxX, r.x + r.width);
+                    maxY = Math.max(maxY, r.y + r.height);
+                });
+                rect = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+            }
+
+            // These are stage-relative coordinates (DOM pixels inside stage container)
+            const centerX = rect.x + rect.width / 2;
+            const topY = rect.y;
+
+            setPopoverPosition({ x: centerX, y: topY });
+        };
+
+        calculatePosition();
+
+        // Update position on drag/transform
+        const interval = setInterval(calculatePosition, 16); // ~60fps
+        return () => clearInterval(interval);
+    }, [selectedIds, elements, scale, dimensions, editingId, stageRef]);
+
     return (
         <div
-            className="flex-1 overflow-auto bg-[#18191B] scrollbar-hide select-none relative"
+            className="flex-1 overflow-hidden bg-[#18191B] relative"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             ref={containerRef}
         >
-            <div
-                className="min-h-full min-w-full flex p-10"
-                style={{ width: 'fit-content' }}
-            >
-                <div
-                    className="bg-white shadow-2xl relative m-auto"
-                    style={{
-                        width: PAGE_WIDTH * scale,
-                        height: PAGE_HEIGHT * scale,
-                        minWidth: PAGE_WIDTH * scale,
-                        minHeight: PAGE_HEIGHT * scale,
+            <div className={`w-full h-full flex justify-center items-center transition-opacity duration-500 ${isInitialized ? 'opacity-100' : 'opacity-0'} ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+                <Stage
+                    width={dimensions.width || window.innerWidth}
+                    height={dimensions.height || window.innerHeight}
+                    scaleX={scale}
+                    scaleY={scale}
+                    draggable={isHandMode}
+                    onClick={(e) => {
+                        if (isHandMode) return;
+                        const clickedOnEmpty = e.target === e.target.getStage();
+                        if (clickedOnEmpty) onSelect([]);
                     }}
+                    onWheel={handleWheel}
+                    ref={stageRef}
                 >
-                    <Stage
-                        width={PAGE_WIDTH * scale}
-                        height={PAGE_HEIGHT * scale}
-                        scaleX={scale}
-                        scaleY={scale}
-                        onClick={(e) => {
-                            const clickedOnEmpty = e.target === e.target.getStage();
-                            if (clickedOnEmpty) onSelect(null);
-                        }}
-                        onWheel={handleWheel}
-                        ref={stageRef}
-                    >
-                        <Layer perfectDrawEnabled={false}>
+                    <Layer>
+                        {/* Static Page Group */}
+                        <Group
+                            x={0}
+                            y={0}
+                            clip={{ x: 0, y: 0, width: PAGE_WIDTH, height: PAGE_HEIGHT }}
+                        >
+                            <Rect
+                                x={0} y={0} width={PAGE_WIDTH} height={PAGE_HEIGHT}
+                                fill="white"
+                                shadowColor="black" shadowBlur={20} shadowOpacity={0.1}
+                                onClick={() => !isHandMode && onSelect([])}
+                            />
+
                             {elements.map((el, i) => (
                                 <Element
                                     key={el.id || i}
                                     shapeProps={el}
-                                    isSelected={el.id === selectedId}
-                                    onSelect={() => onSelect(el.id)}
+                                    onSelect={handleSelect}
                                     onChange={(newAttrs) => onUpdateElement(el.id, newAttrs)}
                                     onDragMove={handleDragMove}
-                                    onDragEnd={handleDragEnd}
-                                    onStartEditing={() => setEditingId(el.id)}
+                                    onDragEnd={() => setGuides([])}
+                                    onStartEditing={() => !isHandMode && setEditingId(el.id)}
                                     isEditing={editingId === el.id}
+                                    shapeRef={node => { elementRefs.current[el.id] = node; }}
+                                    isHandMode={isHandMode}
                                 />
                             ))}
+
                             {guides.map((guide, i) => (
                                 <Line
                                     key={i}
-                                    points={guide.orientation === 'V'
-                                        ? [guide.x, 0, guide.x, PAGE_HEIGHT]
-                                        : [0, guide.y, PAGE_WIDTH, guide.y]
-                                    }
+                                    points={guide.orientation === 'V' ? [guide.x, 0, guide.x, PAGE_HEIGHT] : [0, guide.y, PAGE_WIDTH, guide.y]}
                                     stroke="#7D2AE8"
                                     strokeWidth={1 / scale}
                                     dash={[4, 4]}
                                     listening={false}
                                 />
                             ))}
-                        </Layer>
-                    </Stage>
 
-                    {/* Text Editing Overlay */}
-                    {editingId && (
-                        <TextEditorOverlay
-                            element={elements.find(el => el.id === editingId)}
-                            scale={scale}
-                            onSave={(newText) => {
-                                onUpdateElement(editingId, { text: newText });
-                                setEditingId(null);
-                            }}
-                            onCancel={() => setEditingId(null)}
-                        />
-                    )}
-                </div>
+                            <Transformer
+                                ref={trRef}
+                                flipEnabled={false}
+                                boundBoxFunc={(oldBox, newBox) => {
+                                    if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) return oldBox;
+                                    return newBox;
+                                }}
+                            />
+                        </Group>
+                    </Layer>
+                </Stage>
+
+                {editingId && (
+                    <TextEditorOverlay
+                        element={elements.find(el => el.id === editingId)}
+                        scale={scale}
+                        stage={stageRef.current}
+                        containerWidth={dimensions.width}
+                        pageWidth={PAGE_WIDTH}
+                        onSave={(newText) => {
+                            onUpdateElement(editingId, { text: newText });
+                            setEditingId(null);
+                        }}
+                        onCancel={() => setEditingId(null)}
+                    />
+                )}
+
+                {/* Element Popover (Mini-Pill) */}
+                {popoverPosition && selectedIds.length > 0 && !editingId && (
+                    <ElementPopover
+                        position={popoverPosition}
+                        selection={elements.find(el => el.id === selectedIds[selectedIds.length - 1])}
+                        onDelete={onDelete}
+                        onDuplicate={onDuplicate}
+                        onLockToggle={() => {
+                            const selection = elements.find(el => el.id === selectedIds[selectedIds.length - 1]);
+                            onUpdateElement(selectedIds, { locked: !selection?.locked });
+                        }}
+                        isMultiSelect={selectedIds.length > 1}
+                        onAlign={onAlign}
+                        onLayerAction={onLayerAction}
+                        isScrolling={isScrolling}
+                    />
+                )}
             </div>
         </div>
     );
-}
+});
 
-const TextEditorOverlay = ({ element, scale, onSave, onCancel }) => {
+export default CanvasStage;
+
+const TextEditorOverlay = ({ element, scale, onSave, onCancel, stage, containerWidth, pageWidth }) => {
     const [text, setText] = useState(element.text);
     const textareaRef = useRef();
 
     useEffect(() => {
         if (textareaRef.current) {
             textareaRef.current.focus();
-            textareaRef.current.select();
         }
     }, []);
 
@@ -384,6 +666,14 @@ const TextEditorOverlay = ({ element, scale, onSave, onCancel }) => {
         }
     };
 
+    if (!stage) return null;
+
+    const stageX = stage.x();
+    const stageY = stage.y();
+
+    const absX = stageX + element.x * scale;
+    const absY = stageY + element.y * scale;
+
     return (
         <textarea
             ref={textareaRef}
@@ -392,89 +682,28 @@ const TextEditorOverlay = ({ element, scale, onSave, onCancel }) => {
             onBlur={() => onSave(text)}
             onKeyDown={handleKeyDown}
             style={{
-                position: 'absolute',
-                top: (element.y * scale),
-                left: (element.x * scale),
+                position: 'fixed',
+                top: absY,
+                left: absX,
                 width: (element.width || 200) * scale,
-                height: (element.fontSize * 1.2) * scale, // Tight height for better fit
+                height: (element.height || element.fontSize * 1.5) * scale * 1.5,
                 fontSize: (element.fontSize || 12) * scale,
                 fontFamily: element.fontFamily || 'Inter',
                 fontWeight: element.fontWeight || 'normal',
-                fontStyle: element.fontStyle === 'italic' ? 'italic' : 'normal',
+                fontStyle: element.fontStyle || 'normal',
                 color: element.fill || '#000000',
-                textAlign: element.align || 'left',
-                lineHeight: 1, // Konva default is closer to 1
                 background: 'transparent',
-                border: 'none',
-                padding: 0,
-                margin: 0,
+                border: '1px solid #7D2AE8',
+                padding: '0px',
+                margin: '0px',
+                lineHeight: element.lineHeight || 1.1, // Adjusted closer to konva
                 outline: 'none',
                 resize: 'none',
                 overflow: 'hidden',
-                zIndex: 1000,
-                transform: `rotate(${element.rotation || 0}deg)`,
+                zIndex: 9999,
+                transform: `rotate(${element.rotation}deg)`,
                 transformOrigin: 'top left',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                caretColor: element.fill || '#000000',
             }}
-            className="selection:bg-[#7D2AE8]/20"
         />
-    );
-};
-
-const EditableText = ({ shapeProps, isSelected, onSelect, onStartEditing, shapeRef, trRef, onDragMove, onDragEnd, onChange, isEditing }) => {
-    return (
-        <React.Fragment>
-            <Text
-                onClick={onSelect}
-                onTap={onSelect}
-                onDblClick={onStartEditing}
-                onDblTap={onStartEditing}
-                ref={shapeRef}
-                {...shapeProps}
-                visible={!isEditing}
-                draggable={!isEditing}
-                onDragMove={onDragMove}
-                onDragEnd={onDragEnd}
-                onTransform={(e) => {
-                    const node = shapeRef.current;
-                    const scaleX = node.scaleX();
-                    const scaleY = node.scaleY();
-
-                    // Reset scale and update fontSize/width instead
-                    node.scaleX(1);
-                    node.scaleY(1);
-
-                    const newFontSize = Math.max(5, Math.round(node.fontSize() * scaleY));
-                    const newWidth = Math.max(5, node.width() * scaleX);
-
-                    node.fontSize(newFontSize);
-                    node.width(newWidth);
-                }}
-                onTransformEnd={(e) => {
-                    const node = shapeRef.current;
-                    onChange({
-                        ...shapeProps,
-                        x: node.x(),
-                        y: node.y(),
-                        fontSize: node.fontSize(),
-                        width: node.width(),
-                        rotation: node.rotation(),
-                    });
-                }}
-            />
-            {isSelected && !isEditing && (
-                <Transformer
-                    ref={trRef}
-                    flipEnabled={false}
-                    enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right']}
-                    boundBoxFunc={(oldBox, newBox) => {
-                        if (Math.abs(newBox.width) < 5 || Math.abs(newBox.height) < 5) return oldBox;
-                        return newBox;
-                    }}
-                />
-            )}
-        </React.Fragment>
     );
 };

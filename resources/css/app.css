@@ -31,4 +31,12 @@
     .text-gradient {
         @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400;
     }
+
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+    .scrollbar-hide {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
 }

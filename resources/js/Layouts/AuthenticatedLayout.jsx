@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import FlashMessage from '@/Components/FlashMessage';
 
 export default function Authenticated({ user, header, children }) {
     const [showingNavigationDropdown, setShowingNavigationDropdown] = useState(false);
@@ -7,6 +8,7 @@ export default function Authenticated({ user, header, children }) {
 
     return (
         <div className="min-h-screen bg-[#0f172a] text-white font-sans">
+            <FlashMessage />
             <style>{`
                 ::-webkit-scrollbar { width: 8px; }
                 ::-webkit-scrollbar-track { background: #0f172a; }
@@ -173,7 +175,6 @@ function ResponsiveNavLink({ active = false, className = '', children, ...props 
     );
 }
 
-import { Fragment } from 'react';
 import { Transition } from '@headlessui/react';
 
 const Dropdown = ({ children }) => {

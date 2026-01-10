@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import EditorNavbar from './EditorNavbar';
-import EditorToolbar from './EditorToolbar';
+import FixedContextToolbar from './FixedContextToolbar';
 import EditorSidebar from './EditorSidebar';
 import CanvasStage from './Canvas/CanvasStage';
 import EditorResourcesDrawer from './EditorResourcesDrawer';
@@ -9,14 +9,21 @@ import axios from 'axios';
 
 export default function KonvaEditor({ initialData, resume, userUploads }) {
     const [elements, setElements] = useState(initialData?.elements || []);
-    const [selectedId, setSelectedId] = useState(null);
-    const [activeTab, setActiveTab] = useState('design');
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [activeTab, setActiveTab] = useState(null); // Closed by default
     const [saving, setSaving] = useState(false);
     const [scale, setScale] = useState(0.8);
     const [title, setTitle] = useState(resume.title);
     const [clipboard, setClipboard] = useState(null);
     const [history, setHistory] = useState([initialData?.elements || []]);
     const [historyStep, setHistoryStep] = useState(0);
+    const [uploads, setUploads] = useState(userUploads || []);
+
+    // Hand tool state
+    const [isHandMode, setIsHandMode] = useState(false);
+    const [isSpacePressed, setIsSpacePressed] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [toolbarForceClose, setToolbarForceClose] = useState(0);
 
     const saveTimeoutRef = useRef(null);
 
@@ -55,8 +62,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         if (!stageRef.current) return;
 
         // Hide selection before export
-        const oldSelectedId = selectedId;
-        setSelectedId(null);
+        const oldSelectedIds = selectedIds;
+        setSelectedIds([]);
 
         // Brief timeout to ensure UI updates before capture
         setTimeout(() => {
@@ -69,9 +76,9 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             document.body.removeChild(link);
 
             // Restore selection
-            setSelectedId(oldSelectedId);
+            setSelectedIds(oldSelectedIds);
         }, 100);
-    }, [stageRef, selectedId, title]);
+    }, [stageRef, selectedIds, title]);
 
     const handleExport = useCallback(() => {
         exportToImage();
@@ -100,8 +107,9 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
     }, [history, historyStep]);
 
-    const handleUpdateElement = (id, newAttrs) => {
-        const newElements = elements.map(el => el.id === id ? { ...el, ...newAttrs } : el);
+    const handleUpdateElement = (idOrIds, newAttrs) => {
+        const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+        const newElements = elements.map(el => ids.includes(el.id) ? { ...el, ...newAttrs } : el);
         setElements(newElements);
         pushToHistory(newElements);
     };
@@ -123,77 +131,152 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         const newElements = [...elements, newElement];
         setElements(newElements);
         pushToHistory(newElements);
-        setSelectedId(id);
+        setSelectedIds([id]);
     }, [elements, pushToHistory]);
 
+    const handleUpload = useCallback(async (file, shouldAddToCanvas = false) => {
+        const formData = new FormData();
+        formData.append('profile_image', file);
+        setIsUploading(true);
+
+        try {
+            const response = await axios.post(route('user-details.upload-image'), formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
+            if (response.data.url) {
+                setUploads(prev => [response.data.url, ...prev]);
+                if (shouldAddToCanvas) {
+                    handleAddElement('image', {
+                        src: response.data.url,
+                        width: 250,
+                        height: 250
+                    });
+                }
+                return response.data.url;
+            }
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert('Failed to upload image. Please try again.');
+        } finally {
+            setIsUploading(false);
+        }
+    }, [handleAddElement]);
+
+    const handleDeleteUpload = useCallback(async (url) => {
+        if (!confirm('Are you sure you want to delete this image?')) return;
+
+        try {
+            await axios.delete(route('user-details.delete-image'), {
+                data: { path: url }
+            });
+            setUploads(prev => prev.filter(item => item !== url));
+        } catch (error) {
+            console.error('Delete failed:', error);
+            alert('Failed to delete image.');
+        }
+    }, []);
+
     const handleDeleteElement = useCallback(() => {
-        if (!selectedId) return;
-        const newElements = elements.filter(el => el.id !== selectedId);
+        if (selectedIds.length === 0) return;
+        const newElements = elements.filter(el => !selectedIds.includes(el.id));
         setElements(newElements);
         pushToHistory(newElements);
-        setSelectedId(null);
-    }, [selectedId, elements, pushToHistory]);
+        setSelectedIds([]);
+    }, [selectedIds, elements, pushToHistory]);
 
     const handleDuplicateElement = useCallback(() => {
-        if (!selectedId) return;
-        const element = elements.find(el => el.id === selectedId);
-        if (!element) return;
+        if (selectedIds.length === 0) return;
 
-        const newId = `el-${Date.now()}`;
-        const duplicatedElement = {
-            ...element,
-            id: newId,
-            x: element.x + 20,
-            y: element.y + 20,
-        };
-        const newElements = [...elements, duplicatedElement];
+        const newElements = [...elements];
+        const newSelectedIds = [];
+
+        selectedIds.forEach(id => {
+            const element = elements.find(el => el.id === id);
+            if (!element) return;
+
+            const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const duplicatedElement = {
+                ...element,
+                id: newId,
+                x: element.x + 20,
+                y: element.y + 20,
+            };
+            newElements.push(duplicatedElement);
+            newSelectedIds.push(newId);
+        });
+
         setElements(newElements);
         pushToHistory(newElements);
-        setSelectedId(newId);
-    }, [selectedId, elements, pushToHistory]);
+        setSelectedIds(newSelectedIds);
+    }, [selectedIds, elements, pushToHistory]);
 
     const [clipboardStyle, setClipboardStyle] = useState(null);
 
     const handleNudge = useCallback((dx, dy) => {
-        if (!selectedId) return;
-        const index = elements.findIndex(el => el.id === selectedId);
-        if (index === -1 || elements[index].locked) return;
+        if (selectedIds.length === 0) return;
 
         setElements(prev => prev.map(el =>
-            el.id === selectedId ? { ...el, x: el.x + dx, y: el.y + dy } : el
+            (selectedIds.includes(el.id) && !el.locked)
+                ? { ...el, x: el.x + dx, y: el.y + dy }
+                : el
         ));
-    }, [selectedId, elements]);
+    }, [selectedIds]);
 
-    const handleLayerAction = useCallback((action) => {
-        if (!selectedId) return;
-        const index = elements.findIndex(el => el.id === selectedId);
-        if (index === -1) return;
+    const handleLayerAction = useCallback((action, payload) => {
+        if (selectedIds.length === 0 && action !== 'reorder') return;
 
         let newElements = [...elements];
-        const element = newElements[index];
-        newElements.splice(index, 1);
 
-        if (action === 'front') {
-            newElements.push(element);
-        } else if (action === 'back') {
-            newElements.unshift(element);
-        } else if (action === 'forward') {
-            newElements.splice(Math.min(newElements.length, index + 1), 0, element);
-        } else if (action === 'backward') {
-            newElements.splice(Math.max(0, index - 1), 0, element);
+        if (action === 'reorder') {
+            const { id, targetIndex } = payload;
+            const currentIndex = newElements.findIndex(el => el.id === id);
+            if (currentIndex !== -1) {
+                const [element] = newElements.splice(currentIndex, 1);
+                newElements.splice(targetIndex, 0, element);
+            }
+        } else {
+            const selectedElements = newElements.filter(el => selectedIds.includes(el.id));
+            const unselectedElements = newElements.filter(el => !selectedIds.includes(el.id));
+
+            selectedElements.sort((a, b) => elements.indexOf(a) - elements.indexOf(b));
+
+            if (action === 'front') {
+                newElements = [...unselectedElements, ...selectedElements];
+            } else if (action === 'back') {
+                newElements = [...selectedElements, ...unselectedElements];
+            } else if (action === 'forward') {
+                if (selectedIds.length === 1) {
+                    const index = elements.findIndex(el => el.id === selectedIds[0]);
+                    if (index < elements.length - 1) {
+                        const el = newElements[index];
+                        newElements.splice(index, 1);
+                        newElements.splice(index + 1, 0, el);
+                    }
+                }
+            } else if (action === 'backward') {
+                if (selectedIds.length === 1) {
+                    const index = elements.findIndex(el => el.id === selectedIds[0]);
+                    if (index > 0) {
+                        const el = newElements[index];
+                        newElements.splice(index, 1);
+                        newElements.splice(index - 1, 0, el);
+                    }
+                }
+            }
         }
 
         setElements(newElements);
         pushToHistory(newElements);
-    }, [selectedId, elements, pushToHistory]);
+    }, [selectedIds, elements, pushToHistory]);
 
     const handleAlign = useCallback((alignment) => {
-        if (!selectedId) return;
+        if (selectedIds.length === 0) return;
         const PAGE_WIDTH = 595;
         const PAGE_HEIGHT = 842;
 
         const newElements = elements.map(el => {
-            if (el.id !== selectedId || el.locked) return el;
+            if (!selectedIds.includes(el.id) || el.locked) return el;
 
             const width = el.width || 100;
             const height = el.height || 100;
@@ -213,73 +296,81 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
 
         setElements(newElements);
         pushToHistory(newElements);
-    }, [selectedId, elements, pushToHistory]);
+    }, [selectedIds, elements, pushToHistory]);
 
     const handleLockToggle = useCallback(() => {
-        if (!selectedId) return;
+        if (selectedIds.length === 0) return;
         const newElements = elements.map(el =>
-            el.id === selectedId ? { ...el, locked: !el.locked } : el
+            selectedIds.includes(el.id) ? { ...el, locked: !el.locked } : el
         );
         setElements(newElements);
         pushToHistory(newElements);
-    }, [selectedId, elements, pushToHistory]);
+    }, [selectedIds, elements, pushToHistory]);
 
     const handleCopyStyle = useCallback(() => {
-        if (!selectedId) return;
-        const element = elements.find(el => el.id === selectedId);
+        if (selectedIds.length !== 1) return;
+        const element = elements.find(el => el.id === selectedIds[0]);
         if (element) {
             const { x, y, id, type, text, ...style } = element;
             setClipboardStyle(style);
         }
-    }, [selectedId, elements]);
+    }, [selectedIds, elements]);
 
     const handlePasteStyle = useCallback(() => {
-        if (!selectedId || !clipboardStyle) return;
+        if (selectedIds.length === 0 || !clipboardStyle) return;
         const newElements = elements.map(el =>
-            el.id === selectedId ? { ...el, ...clipboardStyle } : el
+            selectedIds.includes(el.id) ? { ...el, ...clipboardStyle } : el
         );
         setElements(newElements);
         pushToHistory(newElements);
-    }, [selectedId, elements, clipboardStyle, pushToHistory]);
+    }, [selectedIds, elements, clipboardStyle, pushToHistory]);
 
     const handleCopy = useCallback(() => {
-        if (!selectedId) return;
-        const element = elements.find(el => el.id === selectedId);
-        if (element) {
-            setClipboard({ ...element });
-        }
-    }, [selectedId, elements]);
+        if (selectedIds.length === 0) return;
+        const selectedElements = elements.filter(el => selectedIds.includes(el.id));
+        setClipboard(selectedElements);
+    }, [selectedIds, elements]);
 
     const handlePaste = useCallback(() => {
-        if (!clipboard) return;
-        const newId = `el-${Date.now()}`;
-        const pastedElement = {
-            ...clipboard,
-            id: newId,
-            x: clipboard.x + 20,
-            y: clipboard.y + 20,
-        };
-        setElements(prev => [...prev, pastedElement]);
-        setSelectedId(newId);
-    }, [clipboard]);
+        if (!clipboard || clipboard.length === 0) return;
+
+        const newElements = [...elements];
+        const newSelectedIds = [];
+
+        clipboard.forEach(item => {
+            const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            newElements.push({
+                ...item,
+                id: newId,
+                x: item.x + 20,
+                y: item.y + 20
+            });
+            newSelectedIds.push(newId);
+        });
+
+        setElements(newElements);
+        setSelectedIds(newSelectedIds);
+    }, [clipboard, elements]);
 
     const handleCut = useCallback(() => {
-        if (!selectedId) return;
-        const element = elements.find(el => el.id === selectedId);
-        if (element) {
-            setClipboard({ ...element });
-            handleDeleteElement();
-        }
-    }, [selectedId, elements, handleDeleteElement]);
+        if (selectedIds.length === 0) return;
+        handleCopy();
+        handleDeleteElement();
+    }, [selectedIds, handleCopy, handleDeleteElement]);
 
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+            if (e.code === 'Space' && !e.repeat && !isSpacePressed) {
+                e.preventDefault();
+                setIsSpacePressed(true);
+                setIsHandMode(true);
+            }
+
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-            // Zoom shortcuts (Ctrl + + / -)
             if (cmdOrCtrl) {
                 if (e.key === '=' || e.key === '+') {
                     e.preventDefault();
@@ -298,11 +389,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                 }
                 if (e.key === 'z') {
                     e.preventDefault();
-                    if (e.shiftKey) {
-                        redo();
-                    } else {
-                        undo();
-                    }
+                    if (e.shiftKey) redo();
+                    else undo();
                     return;
                 }
                 if (e.key === 'y') {
@@ -310,36 +398,28 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                     redo();
                     return;
                 }
+                if (e.key === 'c') {
+                    e.preventDefault();
+                    handleCopy();
+                }
+                if (e.key === 'x') {
+                    e.preventDefault();
+                    handleCut();
+                }
+                if (e.key === 'v') {
+                    e.preventDefault();
+                    handlePaste();
+                }
+                if (e.key === 'd') {
+                    e.preventDefault();
+                    handleDuplicateElement();
+                }
             }
 
             switch (e.key) {
                 case 'Delete':
                 case 'Backspace':
                     handleDeleteElement();
-                    break;
-                case 'c':
-                    if (cmdOrCtrl) {
-                        e.preventDefault();
-                        handleCopy();
-                    }
-                    break;
-                case 'x':
-                    if (cmdOrCtrl) {
-                        e.preventDefault();
-                        handleCut();
-                    }
-                    break;
-                case 'v':
-                    if (cmdOrCtrl) {
-                        e.preventDefault();
-                        handlePaste();
-                    }
-                    break;
-                case 'd':
-                    if (cmdOrCtrl) {
-                        e.preventDefault();
-                        handleDuplicateElement();
-                    }
                     break;
                 case 'ArrowLeft':
                     e.preventDefault();
@@ -357,14 +437,23 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                     e.preventDefault();
                     handleNudge(0, e.shiftKey ? 10 : 1);
                     break;
-                default:
-                    break;
+            }
+        };
+
+        const handleKeyUp = (e) => {
+            if (e.code === 'Space') {
+                setIsSpacePressed(false);
+                setIsHandMode(false);
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleDeleteElement, handleDuplicateElement, handleNudge, handleCopy, handlePaste, handleCut, undo, redo]);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, [handleDeleteElement, handleDuplicateElement, handleNudge, handleCopy, handlePaste, handleCut, undo, redo, isSpacePressed]);
 
     const handleDeleteResume = () => {
         if (confirm('Are you sure you want to delete this resume?')) {
@@ -372,8 +461,12 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
     };
 
+    const activeSelection = selectedIds.length > 0
+        ? elements.find(el => el.id === selectedIds[selectedIds.length - 1])
+        : null;
+
     return (
-        <div className="flex flex-col h-screen w-screen bg-[#0E1318] text-white overflow-hidden select-none">
+        <div className={`flex flex-col h-screen w-screen bg-[#0E1318] text-white overflow-hidden select-none ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
             <EditorNavbar
                 resumeTitle={title}
                 onTitleChange={setTitle}
@@ -386,50 +479,62 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                 canRedo={historyStep < history.length - 1}
             />
 
-            {selectedId && (
-                <EditorToolbar
-                    selection={elements.find(el => el.id === selectedId)}
-                    onStyleChange={handleUpdateElement}
-                    onLayerAction={handleLayerAction}
-                    onAlign={handleAlign}
-                    onLockToggle={handleLockToggle}
-                    onFormatPainter={handleCopyStyle}
-                />
-            )}
+            {/* Fixed Context Toolbar */}
+            <FixedContextToolbar
+                selection={activeSelection}
+                selectedIds={selectedIds}
+                elements={elements}
+                onSelect={setSelectedIds}
+                onStyleChange={handleUpdateElement}
+                onAlign={handleAlign}
+                onLayerAction={handleLayerAction}
+                forceClose={toolbarForceClose}
+            />
 
             <div className="flex flex-1 overflow-hidden relative">
                 <EditorSidebar
                     activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    onTabChange={(tab) => {
+                        setActiveTab(tab);
+                        if (tab) setToolbarForceClose(prev => prev + 1);
+                    }}
                 />
 
                 {activeTab && (
-                    <div className="w-80 h-full">
-                        <EditorResourcesDrawer
-                            activeTab={activeTab}
-                            onAddElement={handleAddElement}
-                            userUploads={userUploads}
-                        />
-                    </div>
+                    <EditorResourcesDrawer
+                        activeTab={activeTab}
+                        onAddElement={handleAddElement}
+                        userUploads={uploads}
+                        onUpload={handleUpload}
+                        onDeleteUpload={handleDeleteUpload}
+                        isUploading={isUploading}
+                        onClose={() => setActiveTab(null)}
+                    />
                 )}
 
-                <div className="flex-1 flex flex-col relative bg-[#18191B]">
-                    {/* Zoom Controls (Canva style) */}
-                    <div className="absolute bottom-6 right-6 z-40 flex items-center gap-2 bg-[#252627] p-1.5 rounded-lg border border-white/10 shadow-xl">
-                        <button onClick={() => setScale(s => Math.max(0.1, s - 0.1))} className="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center font-bold">-</button>
-                        <span className="text-[10px] font-bold w-10 text-center">{Math.round(scale * 100)}%</span>
-                        <button onClick={() => setScale(s => Math.min(3, s + 0.1))} className="w-8 h-8 hover:bg-white/10 rounded flex items-center justify-center font-bold">+</button>
+                <div className="flex-1 flex flex-col relative bg-gray-100">
+                    {/* Zoom Controls */}
+                    <div className="absolute bottom-6 right-6 z-40 flex items-center gap-1 bg-white p-1 rounded-lg border border-gray-200 shadow-lg">
+                        <button onClick={() => setScale(s => Math.max(0.1, s - 0.1))} className="w-7 h-7 hover:bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700">−</button>
+                        <span className="text-xs font-medium w-12 text-center text-gray-700">{Math.round(scale * 100)}%</span>
+                        <button onClick={() => setScale(s => Math.min(3, s + 0.1))} className="w-7 h-7 hover:bg-gray-100 rounded flex items-center justify-center font-bold text-gray-700">+</button>
                     </div>
 
                     <CanvasStage
                         elements={elements}
-                        selectedId={selectedId}
-                        onSelect={setSelectedId}
+                        selectedIds={selectedIds}
+                        onSelect={setSelectedIds}
                         onUpdateElement={handleUpdateElement}
                         onAddElementAt={handleAddElement}
+                        onUpload={handleUpload}
                         scale={scale}
                         onScaleChange={setScale}
                         stageRef={stageRef}
+                        isHandMode={isHandMode}
+                        onDelete={handleDeleteElement}
+                        onDuplicate={handleDuplicateElement}
+                        onAlign={handleAlign}
+                        onLayerAction={handleLayerAction}
                     />
                 </div>
             </div>

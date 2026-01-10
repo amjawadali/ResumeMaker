@@ -43,6 +43,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('/language/{language}', [UserDetailsController::class, 'deleteLanguage'])->name('language.destroy');
 
         Route::post('/upload-image', [UserDetailsController::class, 'uploadImage'])->name('upload-image');
+        Route::delete('/delete-image', [UserDetailsController::class, 'deleteImage'])->name('delete-image');
     });
 
     Route::resource('resumes', ResumeController::class);

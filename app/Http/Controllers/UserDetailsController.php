@@ -263,4 +263,27 @@ class UserDetailsController extends Controller
 
         return response()->json(['error' => 'No image uploaded'], 400);
     }
+    public function deleteImage(Request $request)
+    {
+        $request->validate([
+            'path' => 'required|string',
+        ]);
+
+        $path = $request->input('path');
+        $userId = auth()->id();
+
+        // Security check: ensure the filename starts with the user's ID
+        if (!\Illuminate\Support\Str::startsWith(basename($path), $userId . '_')) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Remove asset() / storage/ prefix if it exists to get relative path
+        $relativePath = str_replace(asset('storage/'), '', $path);
+        if (Storage::disk('public')->exists($relativePath)) {
+            Storage::disk('public')->delete($relativePath);
+            return response()->json(['success' => true]);
+        }
+
+        return response()->json(['error' => 'File not found'], 404);
+    }
 }
