@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     ChevronDown, Minus, Plus, Bold, Italic, Underline, Strikethrough,
     AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
@@ -7,6 +7,7 @@ import {
     Search, Check, GripVertical, Image as ImageIcon, Square
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import TextEffectsPanel from './TextEffectsPanel';
 
 const FONT_FAMILIES = [
     'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat',
@@ -16,7 +17,10 @@ const FONT_FAMILIES = [
 
 const FONT_CATEGORIES = ['Handwriting', 'Corporate', 'Display', 'Headings', 'Paragraph', 'Sans-serif', 'Serif'];
 
-export default function FixedContextToolbar({ selection, selectedIds, pages = [], onSelect, onStyleChange, onAlign, onLayerAction, forceClose }) {
+export default function FixedContextToolbar({
+    selection, selectedIds, pages, onSelect, onStyleChange,
+    onAlign, onLayerAction, forceClose, showEffects, setShowEffects
+}) {
     const elements = pages.flatMap(p => p.elements);
     const [activePanel, setActivePanel] = useState(null); // 'position' | 'font' | null
     const [fontSearch, setFontSearch] = useState('');
@@ -31,10 +35,18 @@ export default function FixedContextToolbar({ selection, selectedIds, pages = []
         }
     }, [forceClose]);
 
-    // Close popovers on selection change
+    // Close popovers on selection change (but not the effects panel)
+    const prevSelectedIdsRef = useRef(selectedIds);
     useEffect(() => {
-        setShowTransparency(false);
-        setShowSpacing(false);
+        const prevIds = prevSelectedIdsRef.current;
+        const hasChanged = prevIds.length !== selectedIds.length ||
+            !prevIds.every((id, index) => id === selectedIds[index]);
+
+        if (hasChanged) {
+            setShowTransparency(false);
+            setShowSpacing(false);
+            prevSelectedIdsRef.current = selectedIds;
+        }
     }, [selectedIds]);
 
     if (!selection || selectedIds.length === 0) return null;
@@ -294,7 +306,10 @@ export default function FixedContextToolbar({ selection, selectedIds, pages = []
 
                     <div className="w-px h-5 bg-gray-300 mx-1" />
 
-                    <button className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">
+                    <button
+                        onClick={() => setShowEffects(!showEffects)}
+                        className={`px-3 py-1.5 text-sm font-medium rounded ${showEffects ? 'bg-gray-100 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
+                    >
                         Effects
                     </button>
                     <button className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">
@@ -714,7 +729,8 @@ function DimensionInput({ label, value, onChange, className = '' }) {
     const [localValue, setLocalValue] = useState(value);
 
     useEffect(() => {
-        setLocalValue(Math.round(value * 10) / 10);
+        const num = parseFloat(value);
+        setLocalValue(isNaN(num) ? 0 : Math.round(num * 10) / 10);
     }, [value]);
 
     const submit = () => {

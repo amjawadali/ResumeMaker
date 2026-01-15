@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { confirmAction } from '@/Components/ConfirmDialog';
 import EditorNavbar from './EditorNavbar';
@@ -7,6 +8,7 @@ import EditorSidebar from './EditorSidebar';
 import CanvasStage from './Canvas/CanvasStage';
 import EditorResourcesDrawer from './EditorResourcesDrawer';
 import EditorFooter from './EditorFooter';
+import TextEffectsPanel from './TextEffectsPanel';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 
@@ -21,11 +23,45 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
 
     const [pages, setPages] = useState(initialData?.pages || [defaultPage]);
     const [selectedIds, setSelectedIds] = useState([]);
+
+    // Track last effect change to prevent phantom deselections
+    const lastEffectChangeRef = useRef(0);
+
+    const handleSetSelectedIds = useCallback((ids) => {
+        // If we're trying to deselect (ids=[]) shortly after applying an effect, ignore it.
+        // This fixes the issue where applying an effect triggers a false "click on stage".
+        if (ids.length === 0 && (Date.now() - lastEffectChangeRef.current < 500)) {
+            return;
+        }
+        setSelectedIds(ids);
+
+        // Auto-close effects panel if selection is cleared or not text
+        if (ids.length === 0) {
+            setShowEffects(false);
+        } else {
+            // Check if selected element is text (we need to find it in pages)
+            // We'll do this in a useEffect to access 'pages' cleanly or just verify it here if possible.
+            // Since accessing 'pages' inside useCallback might be stale if not in deps, let's use a useEffect watcher instead.
+        }
+    }, []);
+
+    // Watch selection to auto-close panels
+    useEffect(() => {
+        if (selectedIds.length === 0) {
+            setShowEffects(false);
+        } else {
+            const activeEl = pages.flatMap(p => p.elements).find(e => e.id === selectedIds[0]);
+            if (activeEl && activeEl.type !== 'text') {
+                setShowEffects(false);
+            }
+        }
+    }, [selectedIds, pages]);
     const [activeTab, setActiveTab] = useState(null);
     const [saving, setSaving] = useState(false);
     const [scale, setScale] = useState(1);
     const [title, setTitle] = useState(resume.title);
     const [clipboard, setClipboard] = useState(null);
+    const [showEffects, setShowEffects] = useState(false);
     const [history, setHistory] = useState([initialData?.pages || [defaultPage]]);
     const [historyStep, setHistoryStep] = useState(0);
     const [uploads, setUploads] = useState(userUploads || []);
@@ -118,15 +154,17 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
     }, [history, historyStep]);
 
-    const handleUpdateElement = (idOrIds, newAttrs) => {
+    const handleUpdateElement = useCallback((idOrIds, newAttrs) => {
         const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
-        const newPages = pages.map(page => ({
-            ...page,
-            elements: page.elements.map(el => ids.includes(el.id) ? { ...el, ...newAttrs } : el)
-        }));
-        setPages(newPages);
-        pushToHistory(newPages);
-    };
+        setPages(prevPages => {
+            const newPages = prevPages.map(page => ({
+                ...page,
+                elements: page.elements.map(el => ids.includes(el.id) ? { ...el, ...newAttrs } : el)
+            }));
+            pushToHistory(newPages);
+            return newPages;
+        });
+    }, [pushToHistory]);
 
     const handleAddElement = useCallback((type, props = {}, targetPageId = null) => {
         const id = `el-${Date.now()}`;
@@ -234,28 +272,20 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             return null;
         }
 
-        // Hide selection
-        const prevSelected = selectedIds;
-        setSelectedIds([]);
+        // Note: We are keeping the selection visible in the snapshot to avoid UI flickering/deselection bugs.
+        // In the future, we can implement a way to hide the transformer layer specifically during capture.
 
-        // Use a Promise to wait for React state to update before Konva capture
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                try {
-                    const dataURL = stage.toDataURL({
-                        pixelRatio: 0.5, // Balance quality and size
-                    });
-                    setSelectedIds(prevSelected);
-                    resolve(dataURL);
-                } catch (error) {
-                    console.error('captureSnapshot: Failed to generate dataURL:', error);
-                    toast.error("Snapshot failed: " + error.message);
-                    setSelectedIds(prevSelected);
-                    resolve(null);
-                }
-            }, 100);
-        });
-    }, [selectedIds]);
+        try {
+            const dataURL = stage.toDataURL({
+                pixelRatio: 0.5, // Balance quality and size
+            });
+            return dataURL;
+        } catch (error) {
+            console.error('captureSnapshot: Failed to generate dataURL:', error);
+            // toast.error("Snapshot failed: " + error.message); // Suppress toast for background saves
+            return null;
+        }
+    }, []);
 
     const handleSaveExplicitVersion = useCallback(async (name) => {
         setSaving(true);
@@ -634,12 +664,24 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
 
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') return;
 
             if (e.code === 'Space' && !e.repeat && !isSpacePressed) {
                 e.preventDefault();
                 setIsSpacePressed(true);
                 setIsHandMode(true);
+            }
+
+            if (e.key === 'Enter' && selectedIds.length === 1 && !e.shiftKey) {
+                const element = activeSelection;
+                if (element?.type === 'text') {
+                    // Trigger editing in CanvasStage via some mechanism
+                    // Since editingId is local to CanvasStage, we might need to lift it or use a ref
+                    // For now, let's look at how CanvasStage is used
+                    if (stageRef.current?.startEditing) {
+                        stageRef.current.startEditing(element.id);
+                    }
+                }
             }
 
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -735,7 +777,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
     };
 
-    const activeSelection = (() => {
+    const activeSelection = useMemo(() => {
         if (selectedIds.length === 0) return null;
         const lastId = selectedIds[selectedIds.length - 1];
         for (const page of pages) {
@@ -743,7 +785,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             if (el) return el;
         }
         return null;
-    })();
+    }, [selectedIds, pages]);
 
     return (
         <div className={`flex flex-col h-screen w-screen bg-[#0E1318] text-white overflow-hidden select-none ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
@@ -768,12 +810,44 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                 selection={activeSelection}
                 selectedIds={selectedIds}
                 pages={pages}
-                onSelect={setSelectedIds}
+                onSelect={handleSetSelectedIds}
                 onStyleChange={handleUpdateElement}
                 onAlign={handleAlign}
                 onLayerAction={handleLayerAction}
                 forceClose={toolbarForceClose}
+                showEffects={showEffects}
+                setShowEffects={setShowEffects}
             />
+
+            {/* Text Effects Side Panel */}
+            <AnimatePresence>
+                {showEffects && (
+                    <TextEffectsPanel
+                        key="text-effects-panel"
+                        selection={activeSelection}
+                        onClose={() => setShowEffects(false)}
+                        onEffectChange={(effectData) => {
+                            lastEffectChangeRef.current = Date.now();
+                            const updates = {};
+                            if (effectData.effectType !== undefined) {
+                                updates.effectType = effectData.effectType;
+                                updates.effectParams = effectData.effectParams;
+                            }
+                            if (effectData.shapeType !== undefined) {
+                                updates.shapeType = effectData.shapeType;
+                                updates.shapeCurve = effectData.shapeCurve;
+                            }
+                            if (effectData.background !== undefined) {
+                                updates.background = effectData.background;
+                            }
+
+                            if (Object.keys(updates).length > 0) {
+                                handleUpdateElement(selectedIds, updates);
+                            }
+                        }}
+                    />
+                )}
+            </AnimatePresence>
 
             <div className="flex flex-1 overflow-hidden relative">
                 <EditorSidebar
@@ -805,7 +879,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                         ref={stageRef}
                         pages={pages}
                         selectedIds={selectedIds}
-                        onSelect={setSelectedIds}
+                        onSelect={handleSetSelectedIds}
                         onUpdateElement={handleUpdateElement}
                         onAddElementAt={handleAddElement}
                         onUpload={handleUpload}
