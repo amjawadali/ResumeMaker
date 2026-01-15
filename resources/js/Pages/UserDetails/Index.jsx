@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, router, usePage } from '@inertiajs/react'; // usePage to access flash messages if needed directly or via props
-import { User, GraduationCap, Briefcase, Zap, Award, Languages, Plus, Trash2, Edit2, ChevronDown, Search, Share2, ChevronRight, CheckCircle, AlertCircle, Camera, UploadCloud, X } from 'lucide-react';
+import { User, GraduationCap, Briefcase, Zap, Award, Languages, Plus, Trash2, Edit2, ChevronDown, Search, Share2, ChevronRight, CheckCircle, AlertCircle, Camera, UploadCloud, X, Sparkles, FileText, Loader2 } from 'lucide-react';
+import axios from 'axios';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
@@ -13,6 +14,13 @@ import { confirmAction } from '@/Components/ConfirmDialog';
 export default function UserDetails({ auth, userDetail, educations, experiences, skills, certifications, languages }) {
     const [activeTab, setActiveTab] = useState('personal');
     const [showMultimediaModal, setShowMultimediaModal] = useState(false); // For image upload if needed
+
+    // AI Extraction states
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [filePreview, setFilePreview] = useState(null);
+    const [extracting, setExtracting] = useState(false);
+    const [extractedData, setExtractedData] = useState(null);
+    const [saving, setSaving] = useState(false);
     // Modal states
     const [modals, setModals] = useState({
         education: false,
@@ -114,6 +122,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                         { id: 'skills', label: 'Skills', icon: <Zap size={16} /> },
                                         { id: 'certifications', label: 'Certifications', icon: <Award size={16} /> },
                                         { id: 'languages', label: 'Languages', icon: <Languages size={16} /> },
+                                        { id: 'ai-extract', label: 'Create via AI', icon: <Sparkles size={16} /> },
                                     ].map(tab => (
                                         <button
                                             key={tab.id}
@@ -416,6 +425,22 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                 </div>
                             )}
 
+                            {/* AI Extraction Tab */}
+                            {activeTab === 'ai-extract' && (
+                                <AiExtractionTab
+                                    selectedFile={selectedFile}
+                                    setSelectedFile={setSelectedFile}
+                                    filePreview={filePreview}
+                                    setFilePreview={setFilePreview}
+                                    extracting={extracting}
+                                    setExtracting={setExtracting}
+                                    extractedData={extractedData}
+                                    setExtractedData={setExtractedData}
+                                    saving={saving}
+                                    setSaving={setSaving}
+                                />
+                            )}
+
                         </div>
                     </div>
                 </div>
@@ -608,5 +633,347 @@ function LanguageForm({ onSuccess }) {
             </div>
             <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
         </form>
+    );
+}
+
+// AI Extraction Tab Component
+function AiExtractionTab({ selectedFile, setSelectedFile, filePreview, setFilePreview, extracting, setExtracting, extractedData, setExtractedData, saving, setSaving }) {
+
+    const handleFileDrop = (e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files[0];
+        if (file) {
+            handleFileSelect(file);
+        }
+    };
+
+    const handleFileSelect = (file) => {
+        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
+
+        if (!validTypes.includes(file.type)) {
+            toast.error('Please upload a PDF, image (JPG/PNG), or Word document');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+            toast.error('File size must be less than 10MB');
+            return;
+        }
+
+        setSelectedFile(file);
+
+        // Create preview for images
+        if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => setFilePreview(e.target.result);
+            reader.readAsDataURL(file);
+        } else {
+            setFilePreview(null);
+        }
+    };
+
+    const handleExtract = async () => {
+        if (!selectedFile) {
+            toast.error('Please select a file first');
+            return;
+        }
+
+        setExtracting(true);
+        const formData = new FormData();
+        formData.append('document', selectedFile);
+
+        try {
+            const response = await axios.post(route('user-details.extract-from-document'), formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            if (response.data.success) {
+                setExtractedData(response.data.data);
+                toast.success('Profile data extracted successfully!');
+            } else {
+                toast.error(response.data.error || 'Failed to extract data');
+            }
+        } catch (error) {
+            console.error('Extraction error:', error);
+            toast.error(error.response?.data?.error || 'An error occurred during extraction');
+        } finally {
+            setExtracting(false);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!extractedData) {
+            toast.error('No data to save');
+            return;
+        }
+
+        setSaving(true);
+
+        try {
+            const response = await axios.post(route('user-details.save-extracted-data'), {
+                data: extractedData
+            });
+
+            if (response.data.success) {
+                toast.success('Profile data saved successfully!');
+                // Reload the page to show updated data
+                window.location.reload();
+            } else {
+                toast.error(response.data.error || 'Failed to save data');
+            }
+        } catch (error) {
+            console.error('Save error:', error);
+            toast.error(error.response?.data?.error || 'An error occurred while saving');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-xl border border-white/10 p-8 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/10">
+                <div>
+                    <h3 className="text-xl font-black text-white flex items-center gap-3">
+                        <Sparkles className="text-purple-400" size={24} />
+                        Create Profile via AI
+                    </h3>
+                    <p className="text-xs font-medium text-slate-400 mt-1">Upload your resume/CV and let AI extract your profile data</p>
+                </div>
+            </div>
+
+            {!extractedData ? (
+                <div className="space-y-6">
+                    {/* File Upload Zone */}
+                    <div
+                        className="relative border-2 border-dashed border-white/20 rounded-2xl p-12 text-center hover:border-purple-500/50 transition-all cursor-pointer bg-white/5"
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={handleFileDrop}
+                        onClick={() => document.getElementById('ai-file-upload').click()}
+                    >
+                        <input
+                            id="ai-file-upload"
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
+                        />
+
+                        {selectedFile ? (
+                            <div className="space-y-4">
+                                {filePreview && (
+                                    <img src={filePreview} alt="Preview" className="max-h-64 mx-auto rounded-xl shadow-lg" />
+                                )}
+                                <div className="flex items-center justify-center gap-3 text-white">
+                                    <FileText size={24} className="text-purple-400" />
+                                    <span className="font-bold">{selectedFile.name}</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedFile(null);
+                                            setFilePreview(null);
+                                        }}
+                                        className="text-red-400 hover:text-red-300"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <UploadCloud size={64} className="mx-auto text-slate-500" />
+                                <div>
+                                    <p className="text-white font-bold text-lg mb-2">Drop your resume here or click to browse</p>
+                                    <p className="text-slate-400 text-sm">
+                                        Supports PDF, Images (JPG, PNG), and Word documents (DOC, DOCX)
+                                    </p>
+                                    <p className="text-slate-500 text-xs mt-2">Maximum file size: 10MB</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Extract Button */}
+                    {selectedFile && (
+                        <div className="flex justify-center">
+                            <button
+                                onClick={handleExtract}
+                                disabled={extracting}
+                                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-2xl text-white font-bold text-sm uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
+                            >
+                                {extracting ? (
+                                    <>
+                                        <Loader2 size={20} className="animate-spin" />
+                                        Extracting Profile Data...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={20} />
+                                        Extract Profile Data
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {/* Extracted Data Review */}
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 mb-6">
+                        <div className="flex items-center gap-3 text-green-400">
+                            <CheckCircle size={24} />
+                            <div>
+                                <p className="font-bold">Data Extracted Successfully!</p>
+                                <p className="text-sm text-slate-400">Review the extracted information below and click "Save to Profile" to add it to your profile.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Personal Info */}
+                    {extractedData.personal_info && Object.values(extractedData.personal_info).some(v => v !== null) && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <User size={20} className="text-purple-400" />
+                                Personal Information
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                {Object.entries(extractedData.personal_info).map(([key, value]) => value && (
+                                    <div key={key}>
+                                        <span className="text-slate-500 text-xs uppercase tracking-wider">{key.replace(/_/g, ' ')}</span>
+                                        <p className="text-white font-medium">{value}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Education */}
+                    {extractedData.education && extractedData.education.length > 0 && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <GraduationCap size={20} className="text-purple-400" />
+                                Education ({extractedData.education.length})
+                            </h4>
+                            <div className="space-y-3">
+                                {extractedData.education.map((edu, idx) => (
+                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
+                                        <p className="text-white font-bold">{edu.degree}</p>
+                                        <p className="text-slate-400 text-sm">{edu.institution}</p>
+                                        <p className="text-slate-500 text-xs mt-1">{edu.start_date} - {edu.currently_studying ? 'Present' : edu.end_date}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Experience */}
+                    {extractedData.experience && extractedData.experience.length > 0 && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <Briefcase size={20} className="text-purple-400" />
+                                Experience ({extractedData.experience.length})
+                            </h4>
+                            <div className="space-y-3">
+                                {extractedData.experience.map((exp, idx) => (
+                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
+                                        <p className="text-white font-bold">{exp.position}</p>
+                                        <p className="text-slate-400 text-sm">{exp.company}</p>
+                                        <p className="text-slate-500 text-xs mt-1">{exp.start_date} - {exp.currently_working ? 'Present' : exp.end_date}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Skills */}
+                    {extractedData.skills && extractedData.skills.length > 0 && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <Zap size={20} className="text-purple-400" />
+                                Skills ({extractedData.skills.length})
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                                {extractedData.skills.map((skill, idx) => (
+                                    <span key={idx} className="px-4 py-2 bg-white/10 rounded-xl text-white text-sm font-medium">
+                                        {skill.name} <span className="text-slate-400 text-xs">({skill.level})</span>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Certifications */}
+                    {extractedData.certifications && extractedData.certifications.length > 0 && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <Award size={20} className="text-purple-400" />
+                                Certifications ({extractedData.certifications.length})
+                            </h4>
+                            <div className="space-y-3">
+                                {extractedData.certifications.map((cert, idx) => (
+                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
+                                        <p className="text-white font-bold">{cert.name}</p>
+                                        <p className="text-slate-400 text-sm">{cert.issuing_organization}</p>
+                                        <p className="text-slate-500 text-xs mt-1">{cert.issue_date}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Languages */}
+                    {extractedData.languages && extractedData.languages.length > 0 && (
+                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
+                                <Languages size={20} className="text-purple-400" />
+                                Languages ({extractedData.languages.length})
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                                {extractedData.languages.map((lang, idx) => (
+                                    <span key={idx} className="px-4 py-2 bg-white/10 rounded-xl text-white text-sm font-medium">
+                                        {lang.name} <span className="text-slate-400 text-xs">({lang.proficiency})</span>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-4 justify-end pt-6 border-t border-white/10">
+                        <button
+                            onClick={() => {
+                                setExtractedData(null);
+                                setSelectedFile(null);
+                                setFilePreview(null);
+                            }}
+                            className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm uppercase tracking-wider transition-all"
+                        >
+                            Start Over
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-bold text-sm uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            {saving ? (
+                                <>
+                                    <Loader2 size={20} className="animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle size={20} />
+                                    Save to Profile
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

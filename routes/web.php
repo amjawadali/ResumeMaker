@@ -44,6 +44,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::post('/upload-image', [UserDetailsController::class, 'uploadImage'])->name('upload-image');
         Route::delete('/delete-image', [UserDetailsController::class, 'deleteImage'])->name('delete-image');
+        
+        // AI Profile Extraction
+        Route::post('/extract-from-document', [UserDetailsController::class, 'extractFromDocument'])->name('extract-from-document');
+        Route::post('/save-extracted-data', [UserDetailsController::class, 'saveExtractedData'])->name('save-extracted-data');
     });
 
     Route::resource('resumes', ResumeController::class);

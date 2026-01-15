@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY','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'),
+        'model' => env('OPENROUTER_MODEL', 'qwen/qwen-2.5-vl-7b-instruct:free'),
+        'api_url' => env('OPENROUTER_API_URL', 'https://openrouter.ai/api/v1/chat/completions'),
+    ],
+
 ];

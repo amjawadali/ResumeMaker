@@ -23,9 +23,8 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - laravel/sail (SAIL) - v1
 - pestphp/pest (PEST) - v3
 - phpunit/phpunit (PHPUNIT) - v11
-- @inertiajs/react (INERTIA) - v2
-- alpinejs (ALPINEJS) - v3
-- react (REACT) - v19
+- @inertiajs/react (INERTIA) - v1
+- react (REACT) - v18
 - tailwindcss (TAILWINDCSS) - v3
 
 ## Conventions
@@ -162,9 +161,7 @@ Route::get('/users', function () {
 - When using deferred props on the frontend, you should add a nice empty state with pulsing / animated skeleton.
 
 ### Inertia Form General Guidance
-- The recommended way to build forms when using Inertia is with the `<Form>` component - a useful example is below. Use `search-docs` with a query of `form component` for guidance.
-- Forms can also be built using the `useForm` helper for more programmatic control, or to follow existing conventions. Use `search-docs` with a query of `useForm helper` for guidance.
-- `resetOnError`, `resetOnSuccess`, and `setDefaultsOnSuccess` are available on the `<Form>` component. Use `search-docs` with a query of 'form component resetting' for guidance.
+- Build forms using the `useForm` helper. Use the code examples and `search-docs` tool with a query of `useForm helper` for guidance.
 
 
 === laravel/core rules ===
@@ -310,41 +307,52 @@ import { Link } from '@inertiajs/react'
 </code-snippet>
 
 
-=== inertia-react/v2/forms rules ===
+=== inertia-react/v1/forms rules ===
 
 ## Inertia + React Forms
 
-<code-snippet name="`<Form>` Component Example" lang="react">
+- For form handling in Inertia pages, use `router.post` and related methods. Do not use regular forms.
 
-import { Form } from '@inertiajs/react'
 
-export default () => (
-    <Form action="/users" method="post">
-        {({
-            errors,
-            hasErrors,
-            processing,
-            wasSuccessful,
-            recentlySuccessful,
-            clearErrors,
-            resetAndClearErrors,
-            defaults
-        }) => (
-        <>
-        <input type="text" name="name" />
+<code-snippet name="Inertia React Form Example" lang="react">
+import { useState } from 'react'
+import { router } from '@inertiajs/react'
 
-        {errors.name && <div>{errors.name}</div>}
+export default function Edit() {
+    const [values, setValues] = useState({
+        first_name: "",
+        last_name: "",
+        email: "",
+    })
 
-        <button type="submit" disabled={processing}>
-            {processing ? 'Creating...' : 'Create User'}
-        </button>
+    function handleChange(e) {
+        const key = e.target.id;
+        const value = e.target.value
 
-        {wasSuccessful && <div>User created successfully!</div>}
-        </>
-    )}
-    </Form>
-)
+        setValues(values => ({
+            ...values,
+            [key]: value,
+        }))
+    }
 
+    function handleSubmit(e) {
+        e.preventDefault()
+
+        router.post('/users', values)
+    }
+
+    return (
+    <form onSubmit={handleSubmit}>
+        <label htmlFor="first_name">First name:</label>
+        <input id="first_name" value={values.first_name} onChange={handleChange} />
+        <label htmlFor="last_name">Last name:</label>
+        <input id="last_name" value={values.last_name} onChange={handleChange} />
+        <label htmlFor="email">Email:</label>
+        <input id="email" value={values.email} onChange={handleChange} />
+        <button type="submit">Submit</button>
+    </form>
+    )
+}
 </code-snippet>
 
 
