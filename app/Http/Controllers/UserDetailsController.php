@@ -286,4 +286,185 @@ class UserDetailsController extends Controller
 
         return response()->json(['error' => 'File not found'], 404);
     }
+
+    /**
+     * Extract profile data from uploaded document (PDF, image, DOCX)
+     */
+    public function extractFromDocument(Request $request)
+    {
+        $request->validate([
+            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
+        ]);
+
+        try {
+            $file = $request->file('document');
+            $extension = strtolower($file->getClientOriginalExtension());
+            
+            // Store uploaded file temporarily
+            $tempPath = storage_path('app/temp/uploads');
+            if (!file_exists($tempPath)) {
+                mkdir($tempPath, 0755, true);
+            }
+            
+            $uploadedPath = $tempPath . '/' . uniqid() . '_' . $file->getClientOriginalName();
+            $file->move($tempPath, basename($uploadedPath));
+            
+            // Convert document to images
+            $documentConverter = new \App\Services\DocumentConverterService();
+            $imagePaths = [];
+            
+            if ($extension === 'pdf') {
+                $imagePaths = $documentConverter->convertPdfToImages($uploadedPath);
+            } elseif (in_array($extension, ['doc', 'docx'])) {
+                $imagePaths = $documentConverter->convertDocxToImages($uploadedPath);
+            } else {
+                // It's already an image
+                $imagePaths = [$documentConverter->processImage($uploadedPath)];
+            }
+            
+            // Extract data from each image using AI
+            $openRouter = new \App\Services\OpenRouterService();
+            $aggregatedData = null;
+            
+            foreach ($imagePaths as $imagePath) {
+                $extractedData = $openRouter->extractProfileDataFromImage($imagePath);
+                
+                if ($aggregatedData === null) {
+                    $aggregatedData = $extractedData;
+                } else {
+                    $aggregatedData = $openRouter->mergeExtractedData($aggregatedData, $extractedData);
+                }
+            }
+            
+            // Sanitize and validate the extracted data
+            $extractor = new \App\Services\ProfileDataExtractor();
+            $sanitizedData = $extractor->sanitizeAndValidate($aggregatedData);
+            
+            // Clean up temporary files
+            $documentConverter->cleanupTempFiles(array_merge($imagePaths, [$uploadedPath]));
+            
+            return response()->json([
+                'success' => true,
+                'data' => $sanitizedData,
+            ]);
+            
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Document extraction error: ' . $e->getMessage());
+            
+            // Return 400 for known errors (like missing Imagick) to show to user
+            $status = str_contains($e->getMessage(), 'Imagick') || str_contains($e->getMessage(), 'upload an image') ? 400 : 500;
+            
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], $status);
+        }
+    }
+
+    /**
+     * Save extracted profile data to database
+     */
+    public function saveExtractedData(Request $request)
+    {
+        $request->validate([
+            'data' => 'required|array',
+            'data.personal_info' => 'required|array',
+            'data.education' => 'array',
+            'data.experience' => 'array',
+            'data.skills' => 'array',
+            'data.certifications' => 'array',
+            'data.languages' => 'array',
+        ]);
+
+        try {
+            $user = auth()->user();
+            $data = $request->input('data');
+            
+            \Illuminate\Support\Facades\DB::beginTransaction();
+            
+            // Save personal info
+            if (!empty($data['personal_info'])) {
+                $userDetail = $user->userDetail ?? new UserDetail(['user_id' => $user->id]);
+                $userDetail->fill(array_filter($data['personal_info'], fn($value) => $value !== null));
+                $userDetail->save();
+            }
+            
+            // Save education
+            if (!empty($data['education'])) {
+                $maxOrder = $user->educations()->max('order') ?? 0;
+                foreach ($data['education'] as $edu) {
+                    $maxOrder++;
+                    Education::create(array_merge($edu, [
+                        'user_id' => $user->id,
+                        'order' => $maxOrder,
+                    ]));
+                }
+            }
+            
+            // Save experience
+            if (!empty($data['experience'])) {
+                $maxOrder = $user->experiences()->max('order') ?? 0;
+                foreach ($data['experience'] as $exp) {
+                    $maxOrder++;
+                    Experience::create(array_merge($exp, [
+                        'user_id' => $user->id,
+                        'order' => $maxOrder,
+                    ]));
+                }
+            }
+            
+            // Save skills
+            if (!empty($data['skills'])) {
+                $maxOrder = $user->skills()->max('order') ?? 0;
+                foreach ($data['skills'] as $skill) {
+                    $maxOrder++;
+                    Skill::create(array_merge($skill, [
+                        'user_id' => $user->id,
+                        'order' => $maxOrder,
+                    ]));
+                }
+            }
+            
+            // Save certifications
+            if (!empty($data['certifications'])) {
+                $maxOrder = $user->certifications()->max('order') ?? 0;
+                foreach ($data['certifications'] as $cert) {
+                    $maxOrder++;
+                    Certification::create(array_merge($cert, [
+                        'user_id' => $user->id,
+                        'order' => $maxOrder,
+                    ]));
+                }
+            }
+            
+            // Save languages
+            if (!empty($data['languages'])) {
+                $maxOrder = $user->languages()->max('order') ?? 0;
+                foreach ($data['languages'] as $lang) {
+                    $maxOrder++;
+                    Language::create(array_merge($lang, [
+                        'user_id' => $user->id,
+                        'order' => $maxOrder,
+                    ]));
+                }
+            }
+            
+            \Illuminate\Support\Facades\DB::commit();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile data saved successfully!',
+            ]);
+            
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('Save extracted data error: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to save profile data: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
+
