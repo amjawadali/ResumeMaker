@@ -41,6 +41,8 @@ class OpenRouterService
             
             // Prepare the API request
             $response = $this->client->post($this->apiUrl, [
+                'timeout' => 120, // 2 minutes timeout for API response
+                'connect_timeout' => 30, // 30 seconds connection timeout
                 'headers' => [
                     'Authorization' => 'Bearer ' . $this->apiKey,
                     'Content-Type' => 'application/json',

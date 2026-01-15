@@ -292,6 +292,9 @@ class UserDetailsController extends Controller
      */
     public function extractFromDocument(Request $request)
     {
+        // Increase execution time to 5 minutes for AI processing
+        set_time_limit(300);
+
         $request->validate([
             'document' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
         ]);

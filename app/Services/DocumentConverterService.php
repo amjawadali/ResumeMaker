@@ -99,8 +99,8 @@ class DocumentConverterService
             $width = $image->width();
             $height = $image->height();
             
-            // Resize if too large (max 2000px on longest side)
-            $maxDimension = 2000;
+            // Resize if too large (max 1500px on longest side)
+            $maxDimension = 1500;
             if ($width > $maxDimension || $height > $maxDimension) {
                 if ($width > $height) {
                     $image->scale(width: $maxDimension);
