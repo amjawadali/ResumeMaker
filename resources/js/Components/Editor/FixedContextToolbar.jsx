@@ -86,124 +86,127 @@ export default function FixedContextToolbar({
 
     const elementType = selection.type;
     const isText = elementType === 'text';
-
-    if (!isText) return null;
+    const isImage = elementType === 'image';
 
     return (
         <>
-            {/* Fixed Floating Toolbar */}
             <div className="fixed top-[60px] left-1/2 -translate-x-1/2 z-50 bg-white rounded-lg shadow-sm border border-gray-200 flex items-center justify-center py-1.5 px-2">
                 <div className="flex items-center gap-1.5">
-                    {/* Font Family Button */}
-                    <button
-                        onClick={() => togglePanel('font')}
-                        className={`flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded border border-gray-300 min-w-[140px] justify-between bg-transparent ${activePanel === 'font' ? 'bg-gray-100 border-purple-500' : ''}`}
-                    >
-                        <span className="font-medium truncate max-w-[100px]">{selection.fontFamily || 'Inter'}</span>
-                        <ChevronDown size={14} className="text-gray-500 shrink-0" />
-                    </button>
+                    {/* Text Controls */}
+                    {isText && (
+                        <>
+                            {/* Font Family Button */}
+                            <button
+                                onClick={() => togglePanel('font')}
+                                className={`flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded border border-gray-300 min-w-[140px] justify-between bg-transparent ${activePanel === 'font' ? 'bg-gray-100 border-purple-500' : ''}`}
+                            >
+                                <span className="font-medium truncate max-w-[100px]">{selection.fontFamily || 'Inter'}</span>
+                                <ChevronDown size={14} className="text-gray-500 shrink-0" />
+                            </button>
 
-                    <div className="w-px h-5 bg-gray-300 mx-1" />
+                            <div className="w-px h-5 bg-gray-300 mx-1" />
 
-                    {/* Font Size Controls */}
-                    <div className="flex items-center border border-gray-300 rounded overflow-hidden">
-                        <button
-                            onClick={() => handleStyleChange('fontSize', Math.max(8, (selection.fontSize || 20) - 1))}
-                            className="px-2 py-1.5 hover:bg-gray-100 border-r border-gray-300 bg-transparent"
-                        >
-                            <Minus size={14} className="text-gray-700" />
-                        </button>
-                        <input
-                            type="number"
-                            value={selection.fontSize || 20}
-                            onChange={(e) => handleStyleChange('fontSize', parseInt(e.target.value) || 20)}
-                            className="w-10 text-center text-sm text-gray-700 border-none focus:outline-none focus:ring-0 py-1 bg-transparent px-0"
-                        />
-                        <button
-                            onClick={() => handleStyleChange('fontSize', (selection.fontSize || 20) + 1)}
-                            className="px-2 py-1.5 hover:bg-gray-100 border-l border-gray-300 bg-transparent"
-                        >
-                            <Plus size={14} className="text-gray-700" />
-                        </button>
-                    </div>
+                            {/* Font Size Controls */}
+                            <div className="flex items-center border border-gray-300 rounded overflow-hidden">
+                                <button
+                                    onClick={() => handleStyleChange('fontSize', Math.max(8, (selection.fontSize || 20) - 1))}
+                                    className="px-2 py-1.5 hover:bg-gray-100 border-r border-gray-300 bg-transparent"
+                                >
+                                    <Minus size={14} className="text-gray-700" />
+                                </button>
+                                <input
+                                    type="number"
+                                    value={selection.fontSize || 20}
+                                    onChange={(e) => handleStyleChange('fontSize', parseInt(e.target.value) || 20)}
+                                    className="w-10 text-center text-sm text-gray-700 border-none focus:outline-none focus:ring-0 py-1 bg-transparent px-0"
+                                />
+                                <button
+                                    onClick={() => handleStyleChange('fontSize', (selection.fontSize || 20) + 1)}
+                                    className="px-2 py-1.5 hover:bg-gray-100 border-l border-gray-300 bg-transparent"
+                                >
+                                    <Plus size={14} className="text-gray-700" />
+                                </button>
+                            </div>
 
-                    {/* Text Color */}
-                    <div className="relative group ml-1">
-                        <button className="flex flex-col items-center justify-center w-8 h-8 hover:bg-gray-100 rounded border border-transparent hover:border-gray-200">
-                            <span className="text-base font-bold text-gray-700">A</span>
-                            <div
-                                className="w-4 h-0.5 mt-0.5 rounded-full"
-                                style={{ backgroundColor: selection.fill || '#000000' }}
+                            {/* Text Color */}
+                            <div className="relative group ml-1">
+                                <button className="flex flex-col items-center justify-center w-8 h-8 hover:bg-gray-100 rounded border border-transparent hover:border-gray-200">
+                                    <span className="text-base font-bold text-gray-700">A</span>
+                                    <div
+                                        className="w-4 h-0.5 mt-0.5 rounded-full"
+                                        style={{ backgroundColor: selection.fill || '#000000' }}
+                                    />
+                                </button>
+                                <input
+                                    type="color"
+                                    value={selection.fill || '#000000'}
+                                    onChange={(e) => handleStyleChange('fill', e.target.value)}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Text Formatting */}
+                            <ToolbarButton
+                                icon={<Bold size={16} />}
+                                active={selection.fontWeight === 'bold'}
+                                onClick={() => handleStyleChange('fontWeight', selection.fontWeight === 'bold' ? 'normal' : 'bold')}
                             />
-                        </button>
-                        <input
-                            type="color"
-                            value={selection.fill || '#000000'}
-                            onChange={(e) => handleStyleChange('fill', e.target.value)}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                        />
-                    </div>
+                            <ToolbarButton
+                                icon={<Italic size={16} />}
+                                active={selection.fontStyle === 'italic'}
+                                onClick={() => handleStyleChange('fontStyle', selection.fontStyle === 'italic' ? 'normal' : 'italic')}
+                            />
+                            <ToolbarButton
+                                icon={<Underline size={16} />}
+                                active={selection.textDecoration === 'underline'}
+                                onClick={() => handleStyleChange('textDecoration', selection.textDecoration === 'underline' ? 'none' : 'underline')}
+                            />
+                            <ToolbarButton
+                                icon={<Strikethrough size={16} />}
+                                active={selection.textDecoration === 'line-through'}
+                                onClick={() => handleStyleChange('textDecoration', selection.textDecoration === 'line-through' ? 'none' : 'line-through')}
+                            />
 
-                    {/* Text Formatting */}
-                    <ToolbarButton
-                        icon={<Bold size={16} />}
-                        active={selection.fontWeight === 'bold'}
-                        onClick={() => handleStyleChange('fontWeight', selection.fontWeight === 'bold' ? 'normal' : 'bold')}
-                    />
-                    <ToolbarButton
-                        icon={<Italic size={16} />}
-                        active={selection.fontStyle === 'italic'}
-                        onClick={() => handleStyleChange('fontStyle', selection.fontStyle === 'italic' ? 'normal' : 'italic')}
-                    />
-                    <ToolbarButton
-                        icon={<Underline size={16} />}
-                        active={selection.textDecoration === 'underline'}
-                        onClick={() => handleStyleChange('textDecoration', selection.textDecoration === 'underline' ? 'none' : 'underline')}
-                    />
-                    <ToolbarButton
-                        icon={<Strikethrough size={16} />}
-                        active={selection.textDecoration === 'line-through'}
-                        onClick={() => handleStyleChange('textDecoration', selection.textDecoration === 'line-through' ? 'none' : 'line-through')}
-                    />
+                            {/* Text Case AA */}
+                            <ToolbarButton
+                                icon={<span className="text-xs font-bold">aA</span>}
+                                active={selection.textTransform === 'uppercase'}
+                                onClick={handleTextTransform}
+                            />
 
-                    {/* Text Case AA */}
-                    <ToolbarButton
-                        icon={<span className="text-xs font-bold">aA</span>}
-                        active={selection.textTransform === 'uppercase'}
-                        onClick={handleTextTransform}
-                    />
+                            <div className="w-px h-5 bg-gray-300 mx-1" />
 
-                    <div className="w-px h-5 bg-gray-300 mx-1" />
+                            {/* Alignment */}
+                            <div className="flex bg-gray-50 rounded border border-gray-200 p-0.5">
+                                <ToolbarIcon
+                                    icon={<AlignLeft size={16} />}
+                                    active={selection.align === 'left'}
+                                    onClick={() => handleStyleChange('align', 'left')}
+                                />
+                                <ToolbarIcon
+                                    icon={<AlignCenter size={16} />}
+                                    active={selection.align === 'center'}
+                                    onClick={() => handleStyleChange('align', 'center')}
+                                />
+                                <ToolbarIcon
+                                    icon={<AlignRight size={16} />}
+                                    active={selection.align === 'right'}
+                                    onClick={() => handleStyleChange('align', 'right')}
+                                />
+                                <ToolbarIcon
+                                    icon={<AlignJustify size={16} />}
+                                    active={selection.align === 'justify'}
+                                    onClick={() => handleStyleChange('align', 'justify')}
+                                />
+                            </div>
 
-                    {/* Alignment */}
-                    <div className="flex bg-gray-50 rounded border border-gray-200 p-0.5">
-                        <ToolbarIcon
-                            icon={<AlignLeft size={16} />}
-                            active={selection.align === 'left'}
-                            onClick={() => handleStyleChange('align', 'left')}
-                        />
-                        <ToolbarIcon
-                            icon={<AlignCenter size={16} />}
-                            active={selection.align === 'center'}
-                            onClick={() => handleStyleChange('align', 'center')}
-                        />
-                        <ToolbarIcon
-                            icon={<AlignRight size={16} />}
-                            active={selection.align === 'right'}
-                            onClick={() => handleStyleChange('align', 'right')}
-                        />
-                        <ToolbarIcon
-                            icon={<AlignJustify size={16} />}
-                            active={selection.align === 'justify'}
-                            onClick={() => handleStyleChange('align', 'justify')}
-                        />
-                    </div>
-
-                    <ToolbarButton
-                        icon={<List size={16} />}
-                        active={selection.listType === 'bullet'}
-                        onClick={() => handleList('bullet')}
-                    />
+                            <ToolbarButton
+                                icon={<List size={16} />}
+                                active={selection.listType === 'bullet'}
+                                onClick={() => handleList('bullet')}
+                            />
+                        </>
+                    )}
 
                     {/* Transparency */}
                     <div className="relative">
@@ -247,62 +250,64 @@ export default function FixedContextToolbar({
                         )}
                     </div>
 
-                    {/* Spacing (Letter & Line) */}
-                    <div className="relative">
-                        <ToolbarButton
-                            icon={
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M11 5h2M11 19h2M11 12h2" />
-                                    <path d="M5 12h14" strokeWidth="1.5" />
-                                    <path d="M9 8l-2 4 2 4M15 8l2 4-2 4" />
-                                </svg>
-                            }
-                            onClick={() => {
-                                setShowSpacing(!showSpacing);
-                                if (!showSpacing) setShowTransparency(false);
-                            }}
-                            active={showSpacing}
-                            tooltip="Spacing"
-                        />
-                        {showSpacing && (
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-72" style={{ zIndex: 2 }}>
-                                {/* Letter Spacing */}
-                                <div className="mb-4">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-gray-700">Letter spacing</span>
-                                        <span className="text-xs font-bold text-gray-900 w-12 text-right">{Math.round(selection.letterSpacing || 0)}</span>
+                    {/* Spacing (Letter & Line) - Text Only */}
+                    {isText && (
+                        <div className="relative">
+                            <ToolbarButton
+                                icon={
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M11 5h2M11 19h2M11 12h2" />
+                                        <path d="M5 12h14" strokeWidth="1.5" />
+                                        <path d="M9 8l-2 4 2 4M15 8l2 4-2 4" />
+                                    </svg>
+                                }
+                                onClick={() => {
+                                    setShowSpacing(!showSpacing);
+                                    if (!showSpacing) setShowTransparency(false);
+                                }}
+                                active={showSpacing}
+                                tooltip="Spacing"
+                            />
+                            {showSpacing && (
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl p-4 w-72" style={{ zIndex: 2 }}>
+                                    {/* Letter Spacing */}
+                                    <div className="mb-4">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-gray-700">Letter spacing</span>
+                                            <span className="text-xs font-bold text-gray-900 w-12 text-right">{Math.round(selection.letterSpacing || 0)}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="-43"
+                                            max="200"
+                                            step="1"
+                                            value={selection.letterSpacing || 0}
+                                            onChange={(e) => handleStyleChange('letterSpacing', parseFloat(e.target.value))}
+                                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                        />
                                     </div>
-                                    <input
-                                        type="range"
-                                        min="-43"
-                                        max="200"
-                                        step="1"
-                                        value={selection.letterSpacing || 0}
-                                        onChange={(e) => handleStyleChange('letterSpacing', parseFloat(e.target.value))}
-                                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                    />
-                                </div>
 
-                                {/* Line Spacing */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-gray-700">Line spacing</span>
-                                        <span className="text-xs font-bold text-gray-900 w-12 text-right">{(selection.lineHeight || 1).toFixed(1)}</span>
+                                    {/* Line Spacing */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-gray-700">Line spacing</span>
+                                            <span className="text-xs font-bold text-gray-900 w-12 text-right">{(selection.lineHeight || 1).toFixed(1)}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0.5"
+                                            max="3"
+                                            step="0.1"
+                                            value={selection.lineHeight || 1}
+                                            onChange={(e) => handleStyleChange('lineHeight', parseFloat(e.target.value))}
+                                            className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                                        />
                                     </div>
-                                    <input
-                                        type="range"
-                                        min="0.5"
-                                        max="3"
-                                        step="0.1"
-                                        value={selection.lineHeight || 1}
-                                        onChange={(e) => handleStyleChange('lineHeight', parseFloat(e.target.value))}
-                                        className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                                    />
-                                </div>
 
-                            </div>
-                        )}
-                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="w-px h-5 bg-gray-300 mx-1" />
 
@@ -310,7 +315,7 @@ export default function FixedContextToolbar({
                         onClick={() => setShowEffects(!showEffects)}
                         className={`px-3 py-1.5 text-sm font-medium rounded ${showEffects ? 'bg-gray-100 text-black' : 'text-gray-700 hover:bg-gray-100'}`}
                     >
-                        Effects
+                        {isImage ? 'Edit Image' : 'Effects'}
                     </button>
                     <button className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">
                         Animate

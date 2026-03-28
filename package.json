@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@headlessui/react": "^1.7.18",
+        "@imgly/background-removal": "^1.7.0",
         "framer-motion": "^12.25.0",
         "konva": "^10.0.12",
         "lucide-react": "^0.344.0",

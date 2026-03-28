@@ -1,8 +1,13 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { Eye, Plus } from 'lucide-react';
+import KonvaPreview from '@/Components/Editor/Canvas/KonvaPreview';
+import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
+import ScaleFit from '@/Components/ScaleFit';
 
 export default function Index({ auth, templates }) {
+    const defaultElements = createPremiumTemplate().elements;
+    const defaultPages = [{ id: 'p1', elements: defaultElements }];
     return (
         <AuthenticatedLayout user={auth.user}>
             <Head title="Browse Templates" />
@@ -22,8 +27,16 @@ export default function Index({ auth, templates }) {
                                     {template.preview_image ? (
                                         <img src={template.preview_image} alt={template.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                                     ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300">
-                                            <span className="font-bold text-xl uppercase tracking-widest">Preview</span>
+                                        <div className="w-full h-full bg-slate-100 pointer-events-none select-none overflow-hidden">
+                                            <ScaleFit width={595} height={842} className="w-full h-full bg-white origin-top transform-gpu group-hover:scale-[1.05] transition-transform duration-700">
+                                                <KonvaPreview
+                                                    pages={defaultPages}
+                                                    elements={defaultElements}
+                                                    scale={1}
+                                                    width={595}
+                                                    height={842}
+                                                />
+                                            </ScaleFit>
                                         </div>
                                     )}
 

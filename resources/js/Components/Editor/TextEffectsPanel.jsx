@@ -24,6 +24,12 @@ export default function TextEffectsPanel({ selection, onClose, onEffectChange })
         color: '#000000',
         color2: '#ff0000',
     });
+    const [fillType, setFillType] = useState(selection?.fillType || 'solid');
+    const [gradientParams, setGradientParams] = useState(selection?.gradientParams || {
+        startColor: selection?.fill || '#000000',
+        endColor: '#ff0000',
+        angle: 90
+    });
     const [shapeType, setShapeType] = useState(selection?.shapeType || 'none');
     const [shapeCurve, setShapeCurve] = useState(selection?.shapeCurve || 85);
     const [background, setBackground] = useState(selection?.background || {
@@ -42,8 +48,10 @@ export default function TextEffectsPanel({ selection, onClose, onEffectChange })
             setShapeType(selection.shapeType || 'none');
             if (selection.shapeCurve !== undefined) setShapeCurve(selection.shapeCurve);
             if (selection.background) setBackground(selection.background);
+            setFillType(selection.fillType || 'solid');
+            if (selection.gradientParams) setGradientParams(selection.gradientParams);
         }
-    }, [selection?.id, selection?.effectType, JSON.stringify(selection?.effectParams)]);
+    }, [selection?.id, selection?.effectType, JSON.stringify(selection?.effectParams), selection?.fillType, JSON.stringify(selection?.gradientParams)]);
 
     const handleEffectSelect = (effectId) => {
         setSelectedEffect(effectId);
@@ -65,6 +73,17 @@ export default function TextEffectsPanel({ selection, onClose, onEffectChange })
         const newBg = { ...background, ...updates };
         setBackground(newBg);
         onEffectChange({ background: newBg });
+    };
+
+    const handleFillTypeChange = (type) => {
+        setFillType(type);
+        onEffectChange({ fillType: type, gradientParams: type === 'gradient' ? gradientParams : undefined });
+    };
+
+    const handleGradientChange = (updates) => {
+        const newParams = { ...gradientParams, ...updates };
+        setGradientParams(newParams);
+        onEffectChange({ fillType: 'gradient', gradientParams: newParams });
     };
 
     if (!selection) {
@@ -136,10 +155,66 @@ export default function TextEffectsPanel({ selection, onClose, onEffectChange })
                 >
                     Background
                 </button>
+                {(activeTab === 'fill' || true) && (
+                    <button
+                        onClick={() => setActiveTab('fill')}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'fill' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                    >
+                        Fill
+                    </button>
+                )}
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {activeTab === 'fill' && (
+                    <>
+                        <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+                            <button
+                                onClick={() => handleFillTypeChange('solid')}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${fillType === 'solid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Solid
+                            </button>
+                            <button
+                                onClick={() => handleFillTypeChange('gradient')}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${fillType === 'gradient' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Gradient
+                            </button>
+                        </div>
+
+                        {fillType === 'solid' ? (
+                            <ColorControl
+                                label="Color"
+                                value={selection.fill || '#000000'}
+                                onChange={(v) => onEffectChange({ fill: v })}
+                            />
+                        ) : (
+                            <div className="space-y-4">
+                                <ColorControl
+                                    label="Start Color"
+                                    value={gradientParams.startColor}
+                                    onChange={(v) => handleGradientChange({ startColor: v })}
+                                />
+                                <ColorControl
+                                    label="End Color"
+                                    value={gradientParams.endColor}
+                                    onChange={(v) => handleGradientChange({ endColor: v })}
+                                />
+                                <SliderControl
+                                    label="Angle"
+                                    value={gradientParams.angle}
+                                    onChange={(v) => handleGradientChange({ angle: v })}
+                                    min={0}
+                                    max={360}
+                                />
+                            </div>
+                        )}
+                    </>
+                )}
+
                 {activeTab === 'style' && (
                     <>
                         {/* Effect Grid */}

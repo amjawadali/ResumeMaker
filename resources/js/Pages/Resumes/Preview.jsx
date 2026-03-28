@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import KonvaPreview from '@/Components/Editor/Canvas/KonvaPreview';
-import { createKonvaModernTemplate } from '@/Utils/KonvaTemplateLoader';
+import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 
 export default function Preview({ resume, mode = 'preview', data }) {
     const [initialData, setInitialData] = useState(null);
@@ -10,7 +10,7 @@ export default function Preview({ resume, mode = 'preview', data }) {
         if (resume.canvas_state) {
             setInitialData(resume.canvas_state);
         } else if (data) {
-            const template = createKonvaModernTemplate(data.userDetail, data.experiences, data.educations, data.skills, data.certifications, data.languages);
+            const template = createPremiumTemplate(data.userDetail, data.experiences, data.educations, data.skills, data.certifications, data.languages);
             setInitialData(template);
         }
     }, [resume, data]);

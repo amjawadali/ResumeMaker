@@ -43,6 +43,8 @@ class ProfileDataExtractor
             'zip_code' => $this->sanitizeString($data['zip_code'] ?? null, 20),
             'country' => $this->sanitizeString($data['country'] ?? null, 100),
             'website' => $this->sanitizeUrl($data['website'] ?? null),
+            'linkedin' => $this->sanitizeUrl($data['linkedin'] ?? null),
+            'github' => $this->sanitizeUrl($data['github'] ?? null),
             'professional_summary' => $this->sanitizeText($data['professional_summary'] ?? null),
         ];
     }

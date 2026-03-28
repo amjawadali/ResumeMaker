@@ -4,7 +4,8 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import { CheckCircle, Wand2 } from 'lucide-react';
-import Modern from '@/Components/Templates/Modern';
+import KonvaPreview from '@/Components/Editor/Canvas/KonvaPreview';
+import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 import ScaleFit from '@/Components/ScaleFit';
 
 export default function Create({ auth, templates, template_id, data: previewData }) {
@@ -12,6 +13,18 @@ export default function Create({ auth, templates, template_id, data: previewData
         title: 'My Resume',
         template_id: template_id || (templates.length > 0 ? templates[0].id : ''),
     });
+
+    // Generate dynamic preview data once
+    const previewDataValues = previewData || {};
+    const defaultElements = createPremiumTemplate(
+        previewDataValues.userDetail,
+        previewDataValues.experiences,
+        previewDataValues.educations,
+        previewDataValues.skills,
+        previewDataValues.certifications,
+        previewDataValues.languages
+    ).elements;
+    const defaultPages = [{ id: 'p1', elements: defaultElements }];
 
     const submit = (e) => {
         e.preventDefault();
@@ -70,10 +83,16 @@ export default function Create({ auth, templates, template_id, data: previewData
                                     {/* Preview Area Container */}
                                     <div className="aspect-[1/1.414] bg-slate-900 relative overflow-hidden">
                                         {/* ScaleFit Wrapper for A4 Template */}
-                                        <ScaleFit width={794} height={1123} className="bg-white pointer-events-none select-none">
+                                        <ScaleFit width={595} height={842} className="bg-white pointer-events-none select-none origin-top-left">
                                             {/* Render Template Component Dynamically */}
-                                            {template.slug === 'modern' || true ? ( // Fallback to Modern for now as it's the only one
-                                                <Modern data={previewData} mode="preview" />
+                                            {template.slug === 'modern' || true ? ( // Fallback to Premium for now
+                                                <KonvaPreview
+                                                    pages={defaultPages}
+                                                    elements={defaultElements}
+                                                    scale={1}
+                                                    width={595}
+                                                    height={842}
+                                                />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 font-black text-4xl">
                                                     {template.name}

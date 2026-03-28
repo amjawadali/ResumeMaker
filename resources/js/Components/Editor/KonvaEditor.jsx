@@ -9,6 +9,8 @@ import CanvasStage from './Canvas/CanvasStage';
 import EditorResourcesDrawer from './EditorResourcesDrawer';
 import EditorFooter from './EditorFooter';
 import TextEffectsPanel from './TextEffectsPanel';
+import ImageEditorPanel from './Panels/ImageEditorPanel';
+import ShapeEditorPanel from './Panels/ShapeEditorPanel';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 
@@ -51,7 +53,12 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             setShowEffects(false);
         } else {
             const activeEl = pages.flatMap(p => p.elements).find(e => e.id === selectedIds[0]);
-            if (activeEl && activeEl.type !== 'text') {
+            // Keep panel open for all supported types
+            const supportedTypes = ['text', 'image', 'rect', 'star', 'polygon', 'triangle', 'circle'];
+            if (activeEl && !supportedTypes.includes(activeEl.type)) {
+                // optional: setShowEffects(false); 
+                // But let's leave it, maybe we add lines later.
+                // Actually, if we switch to an unsupported type, we should probably close it to avoid confusion.
                 setShowEffects(false);
             }
         }
@@ -175,9 +182,19 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             y: 50,
             width: 100,
             height: 100,
-            fill: '#000000',
+            fill: type === 'image' ? null : '#000000',
             text: type === 'text' ? 'Double click to edit' : '',
             fontSize: 20,
+            // Frame-specific defaults
+            ...(type === 'frame' ? {
+                frameShape: props.frameShape || 'circle',
+                fillPatternImage: null,
+                fillPatternScale: { x: 1, y: 1 },
+                fillPatternOffset: { x: 0, y: 0 },
+                fill: '#e0e0e0', // Placeholder fill
+                stroke: '#999999',
+                strokeWidth: 2,
+            } : {}),
             ...props
         };
 
@@ -546,25 +563,62 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         const newPages = [...pages];
         const newSelectedIds = [];
 
-        // Paste into the last page for now
-        if (newPages.length === 0) return; // Should not happen
+        // Paste into the last page for now (or active page if tracked)
+        if (newPages.length === 0) return;
 
-        const lastPage = newPages[newPages.length - 1];
+        // Determine target page: either the one with selection or the last one
+        let targetPageIndex = newPages.length - 1;
+        if (selectedIds.length > 0) {
+            const idx = newPages.findIndex(p => p.elements.some(el => selectedIds.includes(el.id)));
+            if (idx !== -1) targetPageIndex = idx;
+        }
+        const targetPage = newPages[targetPageIndex];
+
+        const pasteOffset = 20;
+
+        const pasteRecursive = (elements) => elements.map(item => {
+            const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const newItem = {
+                ...item,
+                id: newId,
+                x: item.x + pasteOffset,
+                y: item.y + pasteOffset
+            };
+            if (newItem.type === 'group' && newItem.elements) {
+                newItem.elements = pasteRecursive(newItem.elements);
+            }
+            // Top level items get tracked for selection
+            if (elements === clipboard) newSelectedIds.push(newId);
+            return newItem;
+        });
+
+        // This logic is slightly broken because map returns array, but we need to track IDs only for top level.
+        // Let's refactor simple loop for top level.
         const pastedElements = clipboard.map(item => {
             const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
             newSelectedIds.push(newId);
-            return {
-                ...item,
-                id: newId,
-                x: item.x + 20,
-                y: item.y + 20
-            };
+
+            const cloneWithNewIds = (el) => {
+                const elId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                const newEl = { ...el, id: elId };
+                if (newEl.type === 'group' && newEl.elements) {
+                    newEl.elements = newEl.elements.map(child => cloneWithNewIds(child));
+                }
+                return newEl;
+            }
+
+            // Clone children if group
+            let newItem = { ...item, id: newId, x: item.x + pasteOffset, y: item.y + pasteOffset };
+            if (newItem.type === 'group' && newItem.elements) {
+                newItem.elements = newItem.elements.map(child => cloneWithNewIds(child));
+            }
+            return newItem;
         });
 
-        lastPage.elements = [...lastPage.elements, ...pastedElements];
+        targetPage.elements = [...targetPage.elements, ...pastedElements];
         setPages(newPages);
         setSelectedIds(newSelectedIds);
-    }, [clipboard, pages]);
+    }, [clipboard, pages, selectedIds]);
 
     const updatePageTitle = (pageId, newTitle) => {
         const newPages = pages.map(page =>
@@ -573,6 +627,198 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         setPages(newPages);
         // Don't push to history for every keystroke, but auto-save will catch it
     };
+
+
+    const handleGroup = useCallback(() => {
+        if (selectedIds.length < 2) return;
+
+        let newGroupId = null;
+
+        const newPages = pages.map(page => {
+            const selectedInPage = page.elements.filter(el => selectedIds.includes(el.id));
+            if (selectedInPage.length < 2) return page;
+
+            // Sort by Z-index (array order) to maintain layer order inside group
+            selectedInPage.sort((a, b) => page.elements.indexOf(a) - page.elements.indexOf(b));
+
+            // Calculate bounding box
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            selectedInPage.forEach(el => {
+                // Simplified BBox (rotation often makes this tricky, but for grouping we usually take the axis-aligned check of anchors)
+                // For a proper implementation, we'd take the selection rect from Konva transformer logic.
+                // Here we'll just use x,y and width/height.
+                // Assuming elements are not rotated for the sake of MVP group box creation,
+                // OR we accept that the group box might be slightly loose.
+                // Actually, if we just use x,y, it works fine for standard grouping.
+                // Child position relative to group: child.x - group.x
+
+                // Note: If child is rotated, its visual bbox is different.
+                // But conceptually, the group anchor is usually top-left of the union of centers/origins?
+                // Standard: Top-Left of the bounding rectangle of all shapes.
+
+                // Let's stick to simple min/max of position for now.
+                minX = Math.min(minX, el.x);
+                minY = Math.min(minY, el.y);
+                // We need max extent.
+                // Just using x/y is enough for "Origin".
+                // But Group Width/Height is needed for the Transformer to encompass it.
+                // So we do need width calculation.
+                const w = (el.width || 0) * (el.scaleX || 1);
+                const h = (el.height || 0) * (el.scaleY || 1);
+                // This ignores rotation of children contributing to bbox size.
+                // For MVP, this is acceptable.
+                maxX = Math.max(maxX, el.x + w);
+                maxY = Math.max(maxY, el.y + h);
+            });
+
+            newGroupId = `group-${Date.now()}`;
+            const groupX = minX;
+            const groupY = minY;
+            const groupW = maxX - minX;
+            const groupH = maxY - minY;
+
+            const groupElement = {
+                id: newGroupId,
+                type: 'group',
+                x: groupX,
+                y: groupY,
+                width: groupW,
+                height: groupH,
+                rotation: 0,
+                scaleX: 1,
+                scaleY: 1,
+                elements: selectedInPage.map(el => ({
+                    ...el,
+                    x: el.x - groupX,
+                    y: el.y - groupY
+                }))
+            };
+
+            const remaining = page.elements.filter(el => !selectedIds.includes(el.id));
+            // Insert group at the position of the *last* selected element (top-most) or *first*?
+            // Usually top-most to avoid hiding behind others? Or bottom-most?
+            // Let's append to remaining for now (top).
+            return {
+                ...page,
+                elements: [...remaining, groupElement]
+            };
+        });
+
+        setPages(newPages);
+        if (newGroupId) {
+            setSelectedIds([newGroupId]);
+            pushToHistory(newPages);
+        }
+    }, [selectedIds, pages, pushToHistory]);
+
+    const handleUngroup = useCallback(() => {
+        if (selectedIds.length !== 1) return;
+        const groupId = selectedIds[0];
+
+        let ungroupedIds = [];
+
+        const newPages = pages.map(page => {
+            const groupEl = page.elements.find(el => el.id === groupId && el.type === 'group');
+            if (!groupEl) return page;
+
+            const children = groupEl.elements.map(child => {
+                const childAbsX = groupEl.x + child.x;
+                const childAbsY = groupEl.y + child.y;
+                // Rotation/Scale composition is complex if Group is rotated/scaled.
+                // MVP: Assuming Group is NOT rotated/scaled yet (common for fresh groups).
+                // If Group IS rotated, we need to apply transform.
+                // For now, let's assume direct translation.
+                // TODO: Apply matrix transform if group has rotation/scale.
+
+                const newChild = {
+                    ...child,
+                    x: childAbsX,
+                    y: childAbsY
+                    // rotation: child.rotation + groupEl.rotation, // Crude approximation
+                    // scaleX: child.scaleX * groupEl.scaleX...
+                };
+                ungroupedIds.push(newChild.id);
+                return newChild;
+            });
+
+            // Replace group with children
+            const idx = page.elements.indexOf(groupEl);
+            const newElements = [...page.elements];
+            newElements.splice(idx, 1, ...children);
+
+            return { ...page, elements: newElements };
+        });
+
+        if (ungroupedIds.length > 0) {
+            setPages(newPages);
+            setSelectedIds(ungroupedIds);
+            pushToHistory(newPages);
+        }
+    }, [selectedIds, pages, pushToHistory]);
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Ignore if input/textarea is focused (except for some like Ctrl+S maybe)
+            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                handleDeleteElement();
+            }
+
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    undo();
+                }
+                if (e.key === 'y') {
+                    e.preventDefault();
+                    redo();
+                }
+                if (e.key === 'c') {
+                    // Handled by generic copy? Or explicit?
+                    // copy is checking selectedIds state.
+                    handleCopy();
+                }
+                if (e.key === 'v') {
+                    // Paste requires reading clipboard state... 
+                    // But 'clipboard' is state. Accessing it inside effect might be stale if dep array is empty.
+                    // So we must include handlers in dep array.
+                    handlePaste();
+                }
+                if (e.key === 'g') {
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        handleUngroup();
+                    } else {
+                        handleGroup();
+                    }
+                }
+                if (e.key === 'd') {
+                    e.preventDefault();
+                    handleDuplicateElement(); // Ctrl+D
+                }
+            }
+
+            // Nudge
+            if (selectedIds.length > 0) {
+                if (e.key === 'ArrowUp') { e.preventDefault(); handleNudge(0, -1); }
+                if (e.key === 'ArrowDown') { e.preventDefault(); handleNudge(0, 1); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); handleNudge(-1, 0); }
+                if (e.key === 'ArrowRight') { e.preventDefault(); handleNudge(1, 0); }
+
+                if (e.shiftKey) {
+                    if (e.key === 'ArrowUp') { e.preventDefault(); handleNudge(0, -10); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); handleNudge(0, 10); }
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); handleNudge(-10, 0); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); handleNudge(10, 0); }
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleDeleteElement, undo, redo, handleCopy, handlePaste, handleGroup, handleUngroup, handleDuplicateElement, handleNudge, selectedIds]);
 
     const handlePageAction = useCallback(async (pageId, action) => {
         let newPages = [...pages];
@@ -592,19 +838,25 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                     newPages.splice(pageIndex + 1, 0, page);
                 }
                 break;
-            case 'lock':
-                newPages[pageIndex] = { ...newPages[pageIndex], locked: !newPages[pageIndex].locked };
                 break;
             case 'duplicate':
                 const pageToClone = newPages[pageIndex];
                 const clonedPage = JSON.parse(JSON.stringify(pageToClone));
                 clonedPage.id = `page-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
                 // Deep clone elements with new IDs to avoid conflicts
-                clonedPage.elements = clonedPage.elements.map(el => ({
-                    ...el,
-                    id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
-                }));
+                const renewIds = (elements) => elements.map(el => {
+                    const newEl = { ...el, id: `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
+                    if (newEl.type === 'group' && newEl.elements) {
+                        newEl.elements = renewIds(newEl.elements);
+                    }
+                    return newEl;
+                });
+                clonedPage.elements = renewIds(clonedPage.elements);
+
                 newPages.splice(pageIndex + 1, 0, clonedPage);
+                break;
+            case 'lock':
+                newPages[pageIndex] = { ...newPages[pageIndex], locked: !newPages[pageIndex].locked };
                 break;
             case 'delete':
                 if (newPages[pageIndex].locked) {
@@ -817,11 +1069,13 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                 forceClose={toolbarForceClose}
                 showEffects={showEffects}
                 setShowEffects={setShowEffects}
+                onGroup={handleGroup}
+                onUngroup={handleUngroup}
             />
 
-            {/* Text Effects Side Panel */}
+            {/* Effects Side Panel (Text or Image) */}
             <AnimatePresence>
-                {showEffects && (
+                {showEffects && activeSelection?.type === 'text' && (
                     <TextEffectsPanel
                         key="text-effects-panel"
                         selection={activeSelection}
@@ -844,6 +1098,30 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                             if (Object.keys(updates).length > 0) {
                                 handleUpdateElement(selectedIds, updates);
                             }
+                        }}
+                    />
+                )}
+
+                {showEffects && activeSelection?.type === 'image' && (
+                    <ImageEditorPanel
+                        key="image-editor-panel"
+                        selection={activeSelection}
+                        onClose={() => setShowEffects(false)}
+                        onUpdate={(updates) => {
+                            lastEffectChangeRef.current = Date.now();
+                            handleUpdateElement(selectedIds, updates);
+                        }}
+                    />
+                )}
+
+                {showEffects && ['rect', 'star', 'polygon', 'triangle', 'circle'].includes(activeSelection?.type) && (
+                    <ShapeEditorPanel
+                        key="shape-editor-panel"
+                        selection={activeSelection}
+                        onClose={() => setShowEffects(false)}
+                        onUpdate={(id, updates) => {
+                            lastEffectChangeRef.current = Date.now();
+                            handleUpdateElement(selectedIds, updates); // Use selectedIds instead of id to be safe/consistent
                         }}
                     />
                 )}
@@ -894,6 +1172,10 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                         showGrid={showGrid}
                         onPageAction={handlePageAction}
                         onUpdatePageTitle={updatePageTitle}
+                        clipboard={clipboard}
+                        onCopy={handleCopy}
+                        onCut={handleCut}
+                        onPaste={handlePaste}
                     />
 
                     {/* Canva-style Footer */}

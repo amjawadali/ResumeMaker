@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import KonvaEditor from '@/Components/Editor/KonvaEditor';
-import { createKonvaModernTemplate } from '@/Utils/KonvaTemplateLoader';
+import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 
 export default function Edit({
     resume,
@@ -23,7 +23,7 @@ export default function Edit({
         if (resume.canvas_state && (resume.canvas_state.pages || resume.canvas_state.elements)) {
             setInitialData(resume.canvas_state);
         } else {
-            const template = createKonvaModernTemplate(userDetail, experiences, educations, skills, certifications, languages);
+            const template = createPremiumTemplate(userDetail, experiences, educations, skills, certifications, languages);
             setInitialData(template);
         }
     }, []);

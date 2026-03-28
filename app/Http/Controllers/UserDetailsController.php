@@ -292,14 +292,43 @@ class UserDetailsController extends Controller
      */
     public function extractFromDocument(Request $request)
     {
-        // Increase execution time to 5 minutes for AI processing
-        set_time_limit(300);
-
-        $request->validate([
-            'document' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
-        ]);
+        // Increase execution time to 10 minutes for AI processing
+        set_time_limit(600);
 
         try {
+            // Check if we received raw text from frontend OCR
+            if ($request->has('text')) {
+                $request->validate([
+                    'text' => 'required|string',
+                ]);
+                
+                $text = $request->input('text');
+                
+                // Use Gemini if key is provided, otherwise fallback to free local Regex parser
+                if (!empty(config('services.gemini.api_key'))) {
+                    $extractor = new \App\Services\GeminiService();
+                } else {
+                    $extractor = new \App\Services\RegexExtractionService();
+                }
+                
+                $extractedData = $extractor->extractProfileDataFromText($text);
+                
+                // Sanitize and validate the extracted data
+                $dataSanitizer = new \App\Services\ProfileDataExtractor();
+                $sanitizedData = $dataSanitizer->sanitizeAndValidate($extractedData);
+                
+                return response()->json([
+                    'success' => true,
+                    'data' => $sanitizedData,
+                    'method' => (!empty(config('services.gemini.api_key'))) ? 'Gemini AI' : 'Free Regex Parser'
+                ]);
+            }
+        
+            // Fallback for file upload (Legacy support or if text is missing)
+            $request->validate([
+                'document' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
+            ]);
+
             $file = $request->file('document');
             $extension = strtolower($file->getClientOriginalExtension());
             
@@ -326,17 +355,19 @@ class UserDetailsController extends Controller
             }
             
             // Extract data from each image using AI
-            $openRouter = new \App\Services\OpenRouterService();
+            $gemini = new \App\Services\GeminiService();
+            // Note: Since GeminiService currently only supports text, we'll need to adapt it 
+            // if we want to support direct image extraction. 
+            // However, the current flow is usually FrontEnd OCR -> Backend text processing.
+            // If we hit this branch, we might need a fallback or a temporary solution.
+            // For now, let's assume text is always sent, but we'll adapt this for consistency.
+            
             $aggregatedData = null;
             
             foreach ($imagePaths as $imagePath) {
-                $extractedData = $openRouter->extractProfileDataFromImage($imagePath);
-                
-                if ($aggregatedData === null) {
-                    $aggregatedData = $extractedData;
-                } else {
-                    $aggregatedData = $openRouter->mergeExtractedData($aggregatedData, $extractedData);
-                }
+                // If we absolutely need image extraction here, we'd need another method in GeminiService.
+                // For now, we'll throw an error or handle it gracefully.
+                throw new \Exception('Image-based extraction is deprecated. Please use the "Create via AI" tab which uses EasyOCR.');
             }
             
             // Sanitize and validate the extracted data

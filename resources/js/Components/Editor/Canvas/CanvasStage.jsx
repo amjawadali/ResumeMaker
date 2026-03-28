@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+import Konva from 'konva';
 import { Stage, Layer, Rect, Text, Image, Transformer, Line, Group, Ellipse, Star, Arrow, RegularPolygon, Label, Tag, TextPath } from 'react-konva';
 import useImage from 'use-image';
 import ElementPopover from './ElementPopover';
+import ContextMenu from './ContextMenu';
 
 const ELEMENT_TYPES = {
     TEXT: 'text',
@@ -94,19 +96,62 @@ const getKonvaEffectProps = (element) => {
     return props;
 };
 
-const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing, shapeRef, isHandMode, scale, isSelected }) => {
+const getGradientProps = (element, width, height) => {
+    if (element.fillType !== 'gradient' || !element.gradientParams) return {};
+    const { startColor, endColor, angle = 90 } = element.gradientParams;
+
+    // Convert angle to rad (adjusting so 0 is Left-Right, 90 is Top-Bottom)
+    // Common convention: 0 is East (Right).
+    // Gradient logic:
+    // If angle 0 (Left->Right): Start (0, h/2), End (w, h/2).
+    // Actually, let's use the bounding box center-based approach for rotation freedom.
+    const rad = (angle * Math.PI) / 180;
+    const w = width || 200;
+    const h = height || 50;
+    const cx = w / 2;
+    const cy = h / 2;
+    // Radius of the bounding circle
+    const r = Math.sqrt(w * w + h * h) / 2;
+
+    // We project the center along the angle vector
+    // Note: In browser coords, Y increases downwards.
+    // Angle 90 (Top->Bottom) -> sin(90) = 1. Y increases.
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    return {
+        fillPriority: 'linear-gradient',
+        fillLinearGradientStartPoint: {
+            x: cx - r * cos,
+            y: cy - r * sin
+        },
+        fillLinearGradientEndPoint: {
+            x: cx + r * cos,
+            y: cy + r * sin
+        },
+        fillLinearGradientColorStops: [0, startColor, 1, endColor]
+    };
+};
+
+const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing, shapeRef, isHandMode, scale, isSelected, isInGroup }) => {
     const [isHovered, setIsHovered] = useState(false);
     let elementNode;
 
     // Common props for all shapes
     const commonProps = {
-        onClick: (e) => onSelect(e, shapeProps.id),
-        onTap: (e) => onSelect(e, shapeProps.id),
+        onClick: (e) => {
+            if (isInGroup) return;
+            onSelect(e, shapeProps.id);
+        },
+        onTap: (e) => {
+            if (isInGroup) return;
+            onSelect(e, shapeProps.id);
+        },
         ref: shapeRef,
         ...shapeProps,
-        draggable: !isEditing && !isHandMode && !shapeProps.locked,
+        draggable: !isEditing && !isHandMode && !shapeProps.locked && !isInGroup, // Disable draggable if in group
         onMouseEnter: (e) => {
-            if (!isEditing && !isHandMode && !shapeProps.locked) {
+            if (!isEditing && !isHandMode && !shapeProps.locked && !isInGroup) {
                 setIsHovered(true);
                 const stage = e.target.getStage();
                 if (stage) {
@@ -121,8 +166,13 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
                 stage.container().style.cursor = isHandMode ? 'grab' : 'default';
             }
         },
-        onDragMove,
+        opacity: isEditing ? 0 : (shapeProps.opacity ?? 1), // Hide original when editing for In-Place feel
+        onDragMove: (e) => {
+            if (isInGroup) return;
+            onDragMove(e);
+        },
         onDragEnd: (e) => {
+            if (isInGroup) return;
             onChange({
                 ...shapeProps,
                 x: e.target.x(),
@@ -133,6 +183,8 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
         },
         onTransformEnd: (e) => {
             const node = shapeRef.current;
+            if (!node) return; // Safety check
+
             const scaleX = node.scaleX();
             const scaleY = node.scaleY();
             node.scaleX(1);
@@ -149,7 +201,62 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
         }
     };
 
-    if (shapeProps.type === ELEMENT_TYPES.TEXT) {
+    if (shapeProps.type === 'group') {
+        elementNode = (
+            <Group
+                {...commonProps}
+                onTransform={(e) => {
+                    const node = e.target;
+                    onChange({
+                        ...shapeProps,
+                        x: node.x(),
+                        y: node.y(),
+                        width: node.width() * node.scaleX(),
+                        height: node.height() * node.scaleY(),
+                        rotation: node.rotation(),
+                        scaleX: 1, // Bake scale into width/height if possible, or keep scale?
+                        scaleY: 1  // Konva usually keeps scale. But if we resize group, children scale too.
+                        // If we want "resize group" to just scale everything, keeping scale is fine.
+                        // But our logic usually normalizes.
+                        // For Group, normalizing forces processing inputs.
+                        // Let's keep scale 1 and update width/height?
+                        // Wait, Group width/height doesn't affect children layout automatically unless we repack.
+                        // Standard Konva Transformer on Group changes Scale.
+                        // So we should save Scale.
+                    });
+                }}
+                onTransformEnd={(e) => {
+                    const node = e.target;
+                    onChange({
+                        ...shapeProps,
+                        x: node.x(),
+                        y: node.y(),
+                        rotation: node.rotation(),
+                        scaleX: node.scaleX(),
+                        scaleY: node.scaleY(),
+                    });
+                }}
+            >
+                {shapeProps.elements?.map((child) => (
+                    <Element
+                        key={child.id}
+                        shapeProps={child}
+                        isInGroup={true}
+                        onSelect={() => { }} // No-op
+                        onChange={() => { }} // No-op
+                        // Pass other dummies
+                        onDragMove={() => { }}
+                        onDragEnd={() => { }}
+                        onStartEditing={() => { }}
+                        isEditing={false}
+                        isHandMode={isHandMode}
+                        scale={scale}
+                        isSelected={false}
+                    />
+                ))}
+            </Group>
+        );
+    } else if (shapeProps.type === ELEMENT_TYPES.TEXT) {
         let textContent = shapeProps.text;
 
         // Handle visual text transformation
@@ -163,6 +270,7 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
         }
 
         const effectProps = getKonvaEffectProps(shapeProps);
+        const gradientProps = getGradientProps(shapeProps, shapeProps.width, shapeProps.height || (shapeProps.fontSize * 1.2));
         // Exclude width/height from generic props for special wrappers to prevent dual-sizing issues
         const { height, width, ...genericProps } = commonProps;
 
@@ -178,7 +286,8 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
                 <TextPath
                     {...genericProps}
                     {...effectProps}
-                    // Pass width explicitly for text wrapping along path if needed, 
+                    {...gradientProps}
+                    // Pass width explicitly for text wrapping along path if needed,  
                     // though TextPath mainly relies on path length.
                     width={w}
                     text={textContent}
@@ -284,6 +393,7 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
                     <Text
                         {...genericProps}
                         {...effectProps}
+                        {...gradientProps}
                         // x/y are 0 relative to Group
                         x={0}
                         y={0}
@@ -303,6 +413,7 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
                 <Text
                     {...genericProps}
                     {...effectProps}
+                    {...gradientProps}
                     width={shapeProps.width} // Explicitly pass width
                     text={textContent}
                     onDblClick={onStartEditing}
@@ -337,15 +448,24 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
             );
         }
     } else if (shapeProps.type === ELEMENT_TYPES.IMAGE) {
-        elementNode = <KonvaImage commonProps={commonProps} src={shapeProps.src} />;
+        if (isEditing) {
+            elementNode = <ImageCropper shapeProps={shapeProps} src={shapeProps.src} onChange={onChange} />;
+        } else {
+            const imageProps = {
+                ...commonProps,
+                onDblClick: onStartEditing,
+                onDblTap: onStartEditing
+            };
+            elementNode = <KonvaImage commonProps={imageProps} src={shapeProps.src} />;
+        }
     } else if (shapeProps.type === 'circle') {
         elementNode = <Ellipse {...commonProps} radiusX={shapeProps.width / 2} radiusY={shapeProps.height / 2} />;
     } else if (shapeProps.type === 'star') {
         elementNode = (
             <Star
                 {...commonProps}
-                numPoints={5}
-                innerRadius={shapeProps.width / 4}
+                numPoints={shapeProps.numPoints || 5}
+                innerRadius={(shapeProps.width / 2) * (shapeProps.innerRadiusRatio || 0.5)}
                 outerRadius={shapeProps.width / 2}
             />
         );
@@ -378,12 +498,49 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
         elementNode = (
             <RegularPolygon
                 {...commonProps}
-                sides={6}
+                sides={shapeProps.sides || 6}
                 radius={shapeProps.width / 2}
             />
         );
+    } else if (shapeProps.type === 'frame') {
+        // Frame: A shape that can hold an image as a pattern fill
+        const FrameShape = ({ commonProps, shapeProps }) => {
+            const [patternImg] = useImage(shapeProps.fillPatternImage || '', 'anonymous');
+
+            const frameProps = {
+                ...commonProps,
+                fillPatternImage: patternImg,
+                fillPatternScale: shapeProps.fillPatternScale || { x: 1, y: 1 },
+                fillPatternOffset: shapeProps.fillPatternOffset || { x: 0, y: 0 },
+                fillPatternRepeat: 'no-repeat',
+            };
+
+            // Render based on frameShape
+            switch (shapeProps.frameShape) {
+                case 'circle':
+                    return <Ellipse {...frameProps} radiusX={shapeProps.width / 2} radiusY={shapeProps.height / 2} />;
+                case 'star':
+                    return (
+                        <Star
+                            {...frameProps}
+                            numPoints={shapeProps.numPoints || 5}
+                            innerRadius={(shapeProps.width / 2) * (shapeProps.innerRadiusRatio || 0.5)}
+                            outerRadius={shapeProps.width / 2}
+                        />
+                    );
+                case 'triangle':
+                    return <RegularPolygon {...frameProps} sides={3} radius={shapeProps.width / 2} />;
+                case 'polygon':
+                    return <RegularPolygon {...frameProps} sides={shapeProps.sides || 6} radius={shapeProps.width / 2} />;
+                case 'rect':
+                default:
+                    return <Rect {...frameProps} cornerRadius={shapeProps.cornerRadius || 0} />;
+            }
+        };
+
+        elementNode = <FrameShape commonProps={commonProps} shapeProps={shapeProps} />;
     } else {
-        elementNode = <Rect {...commonProps} />;
+        elementNode = <Rect {...commonProps} cornerRadius={shapeProps.cornerRadius || 0} />;
     }
 
     // Calculate Hover Border Coordinates using actual rendered dimensions if available
@@ -420,14 +577,127 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
     );
 };
 
+const hexToRgb = (hex) => {
+    // Remove # if present
+    hex = hex.replace(/^#/, '');
+    // Parse
+    const bigint = parseInt(hex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return { r, g, b };
+}
+
 const KonvaImage = ({ commonProps, src }) => {
     const [img] = useImage(src, 'anonymous');
-    return <Image image={img} {...commonProps} />;
+    const imageRef = useRef();
+
+    useEffect(() => {
+        if (imageRef.current) {
+            if (typeof commonProps.ref === 'function') commonProps.ref(imageRef.current);
+            else if (commonProps.ref) commonProps.ref.current = imageRef.current;
+        }
+    }, [commonProps.ref]);
+
+    useEffect(() => {
+        if (img && imageRef.current) {
+            imageRef.current.cache();
+        }
+    }, [
+        img,
+        commonProps.width,
+        commonProps.height,
+        commonProps.brightness,
+        commonProps.contrast,
+        commonProps.blurRadius,
+        commonProps.saturation,
+        commonProps.noise,
+        commonProps.pixelSize,
+        commonProps.cornerRadius,
+        commonProps.sepia,
+        commonProps.invert,
+        commonProps.grayscale,
+        commonProps.tintColor,
+        commonProps.tintAlpha
+    ]);
+
+    const filters = useMemo(() => {
+        const f = [];
+        if (commonProps.brightness) f.push(Konva.Filters.Brighten);
+        if (commonProps.contrast) f.push(Konva.Filters.Contrast);
+        if (commonProps.blurRadius) f.push(Konva.Filters.Blur);
+        if (commonProps.saturation) f.push(Konva.Filters.HSL);
+        if (commonProps.noise) f.push(Konva.Filters.Noise);
+        if (commonProps.pixelSize > 1) f.push(Konva.Filters.Pixelate);
+        if (commonProps.sepia) f.push(Konva.Filters.Sepia);
+        if (commonProps.invert) f.push(Konva.Filters.Invert);
+        if (commonProps.grayscale) f.push(Konva.Filters.Grayscale);
+        if (commonProps.tintColor) f.push(Konva.Filters.RGBA);
+        return f;
+    }, [
+        commonProps.brightness,
+        commonProps.contrast,
+        commonProps.blurRadius,
+        commonProps.saturation,
+        commonProps.noise,
+        commonProps.pixelSize,
+        commonProps.sepia,
+        commonProps.invert,
+        commonProps.grayscale,
+        commonProps.tintColor
+    ]);
+
+    let rgbaProps = {};
+    if (commonProps.tintColor) {
+        const { r, g, b } = hexToRgb(commonProps.tintColor);
+        rgbaProps = {
+            red: r,
+            green: g,
+            blue: b,
+            alpha: commonProps.tintAlpha !== undefined ? commonProps.tintAlpha : 0.5
+        };
+    }
+
+    const crop = commonProps.cropX !== undefined ? {
+        x: commonProps.cropX,
+        y: commonProps.cropY,
+        width: commonProps.cropWidth,
+        height: commonProps.cropHeight
+    } : null;
+
+    return (
+        <Image
+            image={img}
+            {...commonProps}
+            ref={imageRef}
+            filters={filters}
+            crop={crop}
+            // Filter Props
+            brightness={commonProps.brightness || 0}
+            contrast={commonProps.contrast || 0}
+            blurRadius={commonProps.blurRadius || 0}
+            saturation={commonProps.saturation || 0} // HSL: 0 is normal. -1 to 1 range usually? Konva HSL saturation is -2.0 to 10.0?
+            // Konva: saturation: -1 to 1?
+            // My panel uses -2 to 5.
+            noise={commonProps.noise || 0}
+            pixelSize={commonProps.pixelSize || 1}
+            // Boolean/Simple Filters
+            sepia={commonProps.sepia || 0} // Konva Sepia takes nothing? or value? Docs say no param usually, or levels?
+            // Actually Konva.Filters.Sepia doesn't use attrs. It just applies.
+            // But some forks do. Let's assume standard Konva Sepia has no controls.
+            invert={commonProps.invert || 0}
+            // RGBA Tint
+            {...rgbaProps}
+
+            // Blend Mode
+            globalCompositeOperation={commonProps.blendMode || 'source-over'}
+        />
+    );
 };
 
 import PageToolbar from './PageToolbar';
 
-const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction, showGrid, onPageAction, onUpdatePageTitle }, ref) => {
+const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction, showGrid, onPageAction, onUpdatePageTitle, clipboard, onCopy, onCut, onPaste }, ref) => {
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [guides, setGuides] = useState([]);
@@ -442,11 +712,17 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
     const PAGE_WIDTH = 595;
     const PAGE_HEIGHT = 842;
     const PAGE_GAP = 60;
+    const [mousePos, setMousePos] = useState({ x: null, y: null });
+    const [contextMenu, setContextMenu] = useState(null);
 
     const allElements = pages.flatMap(p => p.elements);
 
     // Track stage position for toolbars
     const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        setEditingId(null);
+    }, [selectedIds]);
 
     useEffect(() => {
         const updatePos = () => {
@@ -675,7 +951,7 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
         const target = e.target;
         const parentPage = target.getParent(); // This will be the Group for the page
         const newGuides = [];
-        const snapThreshold = 5;
+        const snapThreshold = showGrid ? 10 : 5; // Larger threshold when grid is on
 
         const itemWidth = target.width() * target.scaleX();
         const itemHeight = target.height() * target.scaleY();
@@ -719,31 +995,65 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
         let guidesFoundX = false;
         let guidesFoundY = false;
 
+        // Snap to grid if enabled
+        if (showGrid) {
+            const gridSize = 50;
+            const gridX = Math.round(absX / gridSize) * gridSize;
+            const gridY = Math.round(absY / gridSize) * gridSize;
+
+            if (Math.abs(absX - gridX) < snapThreshold) {
+                snappedX = gridX;
+                newGuides.push({ x: gridX, y: 0, width: 1 / scale, height: PAGE_HEIGHT, orientation: 'V', distance: null });
+                guidesFoundX = true;
+            }
+            if (Math.abs(absY - gridY) < snapThreshold) {
+                snappedY = gridY;
+                newGuides.push({ x: 0, y: gridY, width: PAGE_WIDTH, height: 1 / scale, orientation: 'H', distance: null });
+                guidesFoundY = true;
+            }
+        }
+
         others.forEach(obj => {
             const snapPointsX = [
-                { guide: obj.left, item: itemBounds.left, snap: obj.left },
-                { guide: obj.right, item: itemBounds.right, snap: obj.right - itemWidth },
-                { guide: obj.centerX, item: itemBounds.centerX, snap: obj.centerX - itemWidth / 2 },
+                { guide: obj.left, item: itemBounds.left, snap: obj.left, label: 'L' },
+                { guide: obj.right, item: itemBounds.right, snap: obj.right - itemWidth, label: 'R' },
+                { guide: obj.centerX, item: itemBounds.centerX, snap: obj.centerX - itemWidth / 2, label: 'C' },
             ];
 
             snapPointsX.forEach(p => {
                 if (!guidesFoundX && Math.abs(p.item - p.guide) < snapThreshold) {
                     snappedX = p.snap;
-                    newGuides.push({ x: p.guide, y: 0, width: 1 / scale, height: PAGE_HEIGHT, orientation: 'V' });
+                    const distance = Math.abs(p.item - p.guide);
+                    newGuides.push({
+                        x: p.guide,
+                        y: 0,
+                        width: 1 / scale,
+                        height: PAGE_HEIGHT,
+                        orientation: 'V',
+                        distance: distance > 0.5 ? Math.round(distance) : null
+                    });
                     guidesFoundX = true;
                 }
             });
 
             const snapPointsY = [
-                { guide: obj.top, item: itemBounds.top, snap: obj.top },
-                { guide: obj.bottom, item: itemBounds.bottom, snap: obj.bottom - itemHeight },
-                { guide: obj.centerY, item: itemBounds.centerY, snap: obj.centerY - itemHeight / 2 },
+                { guide: obj.top, item: itemBounds.top, snap: obj.top, label: 'T' },
+                { guide: obj.bottom, item: itemBounds.bottom, snap: obj.bottom - itemHeight, label: 'B' },
+                { guide: obj.centerY, item: itemBounds.centerY, snap: obj.centerY - itemHeight / 2, label: 'C' },
             ];
 
             snapPointsY.forEach(p => {
                 if (!guidesFoundY && Math.abs(p.item - p.guide) < snapThreshold) {
                     snappedY = p.snap;
-                    newGuides.push({ x: 0, y: p.guide, width: PAGE_WIDTH, height: 1 / scale, orientation: 'H' });
+                    const distance = Math.abs(p.item - p.guide);
+                    newGuides.push({
+                        x: 0,
+                        y: p.guide,
+                        width: PAGE_WIDTH,
+                        height: 1 / scale,
+                        orientation: 'H',
+                        distance: distance > 0.5 ? Math.round(distance) : null
+                    });
                     guidesFoundY = true;
                 }
             });
@@ -874,12 +1184,60 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
         return () => clearInterval(interval);
     }, [selectedIds, pages, scale, dimensions, editingId, stageRef]);
 
+    // Track mouse position for rulers
+    const handleMouseMove = useCallback((e) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        setMousePos({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        });
+    }, []);
+
+    const handleMouseLeave = useCallback(() => {
+        setMousePos({ x: null, y: null });
+    }, []);
+
+    // Context menu handler
+    const handleContextMenu = useCallback((e) => {
+        e.preventDefault();
+
+        // Get the clicked element if any
+        const stage = stageRef.current;
+        if (!stage) return;
+
+        const pointerPos = stage.getPointerPosition();
+        if (!pointerPos) return;
+
+        // Find if we clicked on an element
+        const clickedElement = allElements.find(el => {
+            const node = elementRefs.current[el.id];
+            if (!node) return false;
+
+            const box = node.getClientRect();
+            return pointerPos.x >= box.x && pointerPos.x <= box.x + box.width &&
+                pointerPos.y >= box.y && pointerPos.y <= box.y + box.height;
+        });
+
+        // If we clicked on an element that's not selected, select it first
+        if (clickedElement && !selectedIds.includes(clickedElement.id)) {
+            onSelect([clickedElement.id]);
+        }
+
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            selection: clickedElement || (selectedIds.length > 0 ? allElements.find(el => el.id === selectedIds[0]) : null)
+        });
+    }, [allElements, selectedIds, onSelect]);
+
     return (
         <div
             className="flex-1 overflow-hidden bg-[#18191B] relative"
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             ref={containerRef}
+            onContextMenu={handleContextMenu}
         >
             <div className={`w-full h-full relative transition-opacity duration-500 ${isInitialized ? 'opacity-100' : 'opacity-0'} ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
 
@@ -938,16 +1296,40 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                                         ))}
                                     </Group>
 
-                                    {/* Page Specific Guides */}
+                                    {/* Page Specific Guides with Distance Labels */}
                                     {guides.map((guide, i) => (
-                                        <Line
-                                            key={i}
-                                            points={guide.orientation === 'V' ? [guide.x, 0, guide.x, PAGE_HEIGHT] : [0, guide.y, PAGE_WIDTH, guide.y]}
-                                            stroke="#7D2AE8"
-                                            strokeWidth={1 / scale}
-                                            dash={[4, 4]}
-                                            listening={false}
-                                        />
+                                        <Group key={i}>
+                                            <Line
+                                                points={guide.orientation === 'V' ? [guide.x, 0, guide.x, PAGE_HEIGHT] : [0, guide.y, PAGE_WIDTH, guide.y]}
+                                                stroke="#7D2AE8"
+                                                strokeWidth={1 / scale}
+                                                dash={[4, 4]}
+                                                listening={false}
+                                            />
+                                            {guide.distance !== null && guide.distance !== undefined && (
+                                                <Label
+                                                    x={guide.orientation === 'V' ? guide.x : PAGE_WIDTH / 2}
+                                                    y={guide.orientation === 'H' ? guide.y : PAGE_HEIGHT / 2}
+                                                    listening={false}
+                                                >
+                                                    <Tag
+                                                        fill="#7D2AE8"
+                                                        cornerRadius={3}
+                                                        pointerDirection="down"
+                                                        pointerWidth={6}
+                                                        pointerHeight={4}
+                                                    />
+                                                    <Text
+                                                        text={`${guide.distance}px`}
+                                                        fontSize={10 / scale}
+                                                        fill="white"
+                                                        padding={4 / scale}
+                                                        fontFamily="monospace"
+                                                        fontStyle="bold"
+                                                    />
+                                                </Label>
+                                            )}
+                                        </Group>
                                     ))}
 
                                     {/* Page Grid */}
@@ -955,17 +1337,17 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                                         <Group listening={false}>
                                             {Array.from({ length: Math.ceil(PAGE_WIDTH / 50) + 1 }).map((_, i) => (
                                                 <Line
-                                                    key={`v-${Math.random()}`}
+                                                    key={`v-${i}`}
                                                     points={[i * 50, 0, i * 50, PAGE_HEIGHT]}
-                                                    stroke="rgba(0,0,0,0.05)"
+                                                    stroke="rgba(139, 61, 255, 0.1)"
                                                     strokeWidth={1 / scale}
                                                 />
                                             ))}
                                             {Array.from({ length: Math.ceil(PAGE_HEIGHT / 50) + 1 }).map((_, i) => (
                                                 <Line
-                                                    key={`h-${Math.random()}`}
+                                                    key={`h-${i}`}
                                                     points={[0, i * 50, PAGE_WIDTH, i * 50]}
-                                                    stroke="rgba(0,0,0,0.05)"
+                                                    stroke="rgba(139, 61, 255, 0.1)"
                                                     strokeWidth={1 / scale}
                                                 />
                                             ))}
@@ -1057,6 +1439,9 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                 {editingId && (() => {
                     const page = pages.find(p => p.elements.some(el => el.id === editingId));
                     const element = page?.elements.find(el => el.id === editingId);
+
+                    if (!element || element.type !== 'text') return null;
+
                     const pageIndex = pages.indexOf(page);
                     const pageYOffset = pageIndex * (PAGE_HEIGHT + PAGE_GAP);
 
@@ -1091,6 +1476,27 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                     onAlign={onAlign}
                     onLayerAction={onLayerAction}
                     isScrolling={isScrolling}
+                />
+            )}
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <ContextMenu
+                    position={{ x: contextMenu.x, y: contextMenu.y }}
+                    selection={contextMenu.selection}
+                    onClose={() => setContextMenu(null)}
+                    onCopy={onCopy}
+                    onCut={onCut}
+                    onPaste={onPaste}
+                    onDuplicate={onDuplicate}
+                    onDelete={onDelete}
+                    onLock={() => {
+                        if (contextMenu.selection) {
+                            onUpdateElement(contextMenu.selection.id, { locked: !contextMenu.selection.locked });
+                        }
+                    }}
+                    onLayerAction={onLayerAction}
+                    canPaste={clipboard && clipboard.length > 0}
                 />
             )}
         </div>
@@ -1169,29 +1575,89 @@ const getCSSEffectStyles = (element) => {
     return styles;
 };
 
-const TextEditorOverlay = ({ element, pageYOffset, scale, onSave, onCancel, stage }) => {
+const TextEditorOverlay = ({ element, onSave, onCancel, stage }) => {
     const [text, setText] = useState(element.text);
     const editorRef = useRef();
+    const [style, setStyle] = useState({});
 
+    // Calculate precise position on mount
     useEffect(() => {
+        if (!stage || !element.id) return;
+
+        const node = stage.findOne('#' + element.id);
+        if (!node) return;
+
+        // Get absolute transform
+        // We need to account for Stage scale/position and Group transforms
+        const tr = node.getAbsoluteTransform();
+        const attrs = node.attrs;
+
+        // Get absolute position of the top-left corner
+        const absPos = node.getAbsolutePosition();
+
+        // Get scale/rotation
+        const absScale = node.getAbsoluteScale();
+        const absRotation = node.getAbsoluteRotation();
+
+        // Get Stage container position in viewport
+        const stageRect = stage.container().getBoundingClientRect();
+
+        // Compute styling
+        const computedStyle = {
+            position: 'absolute',
+            top: stageRect.top + absPos.y + window.scrollY,
+            left: stageRect.left + absPos.x + window.scrollX,
+            width: (node.width() * absScale.x),
+            minHeight: (node.height() * absScale.y),
+            fontSize: (attrs.fontSize || 12) * absScale.y, // Assuming uniform scale mostly
+            fontFamily: attrs.fontFamily || 'Inter, sans-serif',
+            fontWeight: (attrs.fontWeight === 'bold' || (attrs.fontStyle && attrs.fontStyle.includes('bold'))) ? 'bold' : 'normal',
+            fontStyle: (attrs.fontStyle === 'italic' || (attrs.fontStyle && attrs.fontStyle.includes('italic'))) ? 'italic' : 'normal',
+            color: attrs.fill || '#000000',
+            textAlign: attrs.align || 'left',
+            textTransform: attrs.textTransform || 'none',
+            textDecoration: attrs.textDecoration || 'none',
+            letterSpacing: (attrs.letterSpacing || 0) * absScale.x,
+            lineHeight: attrs.lineHeight || 1.1,
+            padding: (attrs.padding || 0) * absScale.y,
+            margin: 0,
+            outline: '2px solid #7D2AE8', // Highlight editing area
+            background: 'transparent', // Or 'rgba(255,255,255,0.9)' for visibility? Transparent matches "In-Place". 
+            // But if text is white on white, might be hard? 
+            // Usually users edit on the background.
+            caretColor: attrs.fill || '#000000',
+            zIndex: 9999,
+            boxSizing: 'border-box',
+            transform: `rotate(${absRotation}deg)`,
+            transformOrigin: 'top left',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'break-word',
+            overflow: 'hidden',
+        };
+
+        // Adjust for "Center" or "Right" alignment visual jump?
+        // Konva draws text from top-left even if aligned center (text is centered in box).
+        // HTML contenteditable is same.
+        // So they should align perfectly.
+
+        setStyle(computedStyle);
+
+        // Focus and select all
         if (editorRef.current) {
             editorRef.current.focus();
-
-            // Place cursor at the end
-            const range = document.createRange();
-            const selection = window.getSelection();
-            range.selectNodeContents(editorRef.current);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
+            // Select all text behaving like standard editors
+            document.execCommand('selectAll', false, null);
         }
-    }, []);
+    }, [stage, element.id]);
+
 
     const handleInput = (e) => {
         setText(e.currentTarget.innerText);
     };
 
     const handleKeyDown = (e) => {
+        // Shift+Enter for new line, Enter to save
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             onSave(text);
@@ -1203,21 +1669,6 @@ const TextEditorOverlay = ({ element, pageYOffset, scale, onSave, onCancel, stag
 
     if (!stage) return null;
 
-    const stageX = stage.x();
-    const stageY = stage.y();
-
-    const absX = stageX + element.x * scale;
-    const absY = stageY + (pageYOffset + element.y) * scale;
-
-    // Determine font properties
-    const fontFamily = element.fontFamily || 'Inter, sans-serif';
-
-    // Normalize font weight and style
-    const isBold = element.fontWeight === 'bold' || element.fontStyle?.includes('bold') || element.fontStyle >= 700;
-    const isItalic = element.fontStyle === 'italic' || element.fontStyle?.includes('italic');
-
-    const effectStyles = getCSSEffectStyles(element);
-
     return (
         <div
             ref={editorRef}
@@ -1226,43 +1677,84 @@ const TextEditorOverlay = ({ element, pageYOffset, scale, onSave, onCancel, stag
             onInput={handleInput}
             onBlur={() => onSave(text)}
             onKeyDown={handleKeyDown}
-            style={{
-                position: 'absolute',
-                top: absY,
-                left: absX,
-                width: (element.width || 0) * scale,
-                height: 'auto',
-                fontSize: (element.fontSize || 12) * scale,
-                fontFamily: fontFamily,
-                fontWeight: isBold ? 'bold' : 'normal',
-                fontStyle: isItalic ? 'italic' : 'normal',
-                color: element.fill || '#000000',
-                textAlign: element.align || 'left',
-                textTransform: element.textTransform || 'none',
-                textDecoration: element.textDecoration || 'none',
-                letterSpacing: (element.letterSpacing || 0) * scale,
-                lineHeight: element.lineHeight || 1.1,
-                padding: (element.padding || 0) * scale,
-                margin: '0px',
-                outline: 'none',
-                background: 'transparent',
-                caretColor: element.fill || '#000000',
-                zIndex: 9999,
-                boxSizing: 'border-box',
-                transform: `rotate(${element.rotation}deg)`,
-                transformOrigin: 'top left',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-                overflow: 'visible',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
-                textRendering: 'optimizeLegibility',
-                WebkitTextSizeAdjust: 'none',
-                ...effectStyles,
-            }}
+            style={style}
+        // Use danger to set initial text to preserve newlines correctly if needed, but innerText usually works.
         >
             {element.text}
         </div>
+    );
+};
+
+const ImageCropper = ({ shapeProps, src, onChange }) => {
+    const [img] = useImage(src, 'anonymous');
+
+    // Default dimensions if image not loaded or crop not set
+    const cropX = shapeProps.cropX !== undefined ? shapeProps.cropX : 0;
+    const cropY = shapeProps.cropY !== undefined ? shapeProps.cropY : 0;
+    // Use shapeProps.cropWidth/Height if exist, or fallback to img.width/height if img loaded, or 100
+    const cropW = shapeProps.cropWidth || (img ? img.width : 100);
+    const cropH = shapeProps.cropHeight || (img ? img.height : 100);
+
+    const scaleX = shapeProps.width / cropW;
+    const scaleY = shapeProps.height / cropH;
+
+    if (!img) return null;
+
+    return (
+        <Group>
+            {/* The Ghost Image (Full Source Context) - Controls Positioning */}
+            <Image
+                image={img}
+                x={-cropX * scaleX}
+                y={-cropY * scaleY}
+                width={img.width * scaleX}
+                height={img.height * scaleY}
+                opacity={0.4}
+                draggable
+                onDragMove={(e) => {
+                    const node = e.target;
+                    const newCropX = -node.x() / scaleX;
+                    const newCropY = -node.y() / scaleY;
+
+                    onChange({
+                        ...shapeProps,
+                        cropX: newCropX,
+                        cropY: newCropY,
+                        cropWidth: cropW,
+                        cropHeight: cropH
+                    });
+                }}
+            />
+
+            {/* The Visible Result (Clear) - Visual Feedback */}
+            <Image
+                image={img}
+                x={0}
+                y={0}
+                width={shapeProps.width}
+                height={shapeProps.height}
+                crop={{
+                    x: cropX,
+                    y: cropY,
+                    width: cropW,
+                    height: cropH
+                }}
+                listening={false}
+            />
+
+            {/* Crop Frame Border */}
+            <Rect
+                x={0}
+                y={0}
+                width={shapeProps.width}
+                height={shapeProps.height}
+                stroke="#fff"
+                strokeWidth={1}
+                dash={[4, 4]}
+                listening={false}
+                shadowColor="black"
+                shadowBlur={2}
+            />
+        </Group>
     );
 };

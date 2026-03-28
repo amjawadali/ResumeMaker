@@ -679,14 +679,89 @@ function AiExtractionTab({ selectedFile, setSelectedFile, filePreview, setFilePr
         }
 
         setExtracting(true);
-        const formData = new FormData();
-        formData.append('document', selectedFile);
 
         try {
-            const response = await axios.post(route('user-details.extract-from-document'), formData, {
+            // 1. Perform OCR using OCR.space API
+            const ocrFormData = new FormData();
+            ocrFormData.append('file', selectedFile);
+            ocrFormData.append('language', 'eng');
+            ocrFormData.append('isOverlayRequired', 'true');
+            ocrFormData.append('OCREngine', '2'); // Engine 2 is generally better for resumes
+
+            const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
+                method: 'POST',
                 headers: {
-                    'Content-Type': 'multipart/form-data',
+                    'apikey': 'K81916881788957'
                 },
+                body: ocrFormData
+            });
+
+            if (!ocrResponse.ok) {
+                throw new Error('OCR API failed');
+            }
+
+            const ocrData = await ocrResponse.json();
+
+            if (ocrData.OCRExitCode !== 1 && ocrData.OCRExitCode !== 2) {
+                throw new Error(ocrData.ErrorMessage || 'OCR failed to process the image');
+            }
+
+            // Extract words and coordinates from OCR.space format
+            const words = [];
+            if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
+                ocrData.ParsedResults.forEach(result => {
+                    if (result.TextOverlay && result.TextOverlay.Lines) {
+                        result.TextOverlay.Lines.forEach(line => {
+                            if (line.Words) {
+                                line.Words.forEach(w => {
+                                    words.push({
+                                        text: w.WordText,
+                                        left: w.Left,
+                                        top: w.Top,
+                                        bottom: w.Top + w.Height
+                                    });
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+
+            if (words.length === 0) {
+                throw new Error('No text detected in the document');
+            }
+
+            // 2. Process and Stitch Text
+            // Sort by top (y) then left (x) with tolerance for same-line items
+            const sortedWords = words.sort((a, b) => {
+                if (Math.abs(a.top - b.top) < 15) { // Adjusted tolerance for OCR.space
+                    return a.left - b.left;
+                }
+                return a.top - b.top;
+            });
+
+            let stitchedText = "";
+            let lastBottom = -1;
+
+            sortedWords.forEach((item) => {
+                if (stitchedText === "") {
+                    stitchedText += item.text;
+                } else {
+                    // New line check
+                    if (lastBottom !== -1 && item.top > lastBottom + 5) { // Tighter buffer for OCR.space
+                        stitchedText += "\n" + item.text;
+                    } else {
+                        stitchedText += " " + item.text;
+                    }
+                }
+                lastBottom = item.bottom;
+            });
+
+            console.log("Stitched Text:", stitchedText);
+
+            // 3. Send raw text to backend for AI Parsing
+            const response = await axios.post(route('user-details.extract-from-document'), {
+                text: stitchedText
             });
 
             if (response.data.success) {
@@ -697,7 +772,9 @@ function AiExtractionTab({ selectedFile, setSelectedFile, filePreview, setFilePr
             }
         } catch (error) {
             console.error('Extraction error:', error);
-            toast.error(error.response?.data?.error || 'An error occurred during extraction');
+            // Check if it's an Axios error or generic
+            const msg = error.response?.data?.error || error.message || 'An error occurred during extraction';
+            toast.error(msg);
         } finally {
             setExtracting(false);
         }
