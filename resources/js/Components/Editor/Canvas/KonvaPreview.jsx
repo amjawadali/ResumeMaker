@@ -27,7 +27,7 @@ export default function KonvaPreview({ pages = [], elements = [], width = 595, h
                 {actualPages.map((page, index) => (
                     <Group key={page.id || index} y={index * (PAGE_HEIGHT + PAGE_GAP)}>
                         <Rect width={PAGE_WIDTH} height={PAGE_HEIGHT} fill="white" />
-                        {page.elements.map((el, i) => {
+                        {(page.elements || []).map((el, i) => {
                             if (el.type === 'text') {
                                 return <Text key={el.id || i} {...el} draggable={false} />;
                             }

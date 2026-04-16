@@ -80,6 +80,11 @@ class User extends Authenticatable
         return $this->hasMany(Language::class)->orderBy('order');
     }
 
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class)->orderBy('order');
+    }
+
     public function resumes(): HasMany
     {
         return $this->hasMany(Resume::class);

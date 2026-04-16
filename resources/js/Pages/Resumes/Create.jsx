@@ -16,15 +16,15 @@ export default function Create({ auth, templates, template_id, data: previewData
 
     // Generate dynamic preview data once
     const previewDataValues = previewData || {};
-    const defaultElements = createPremiumTemplate(
+    const template = createPremiumTemplate(
         previewDataValues.userDetail,
         previewDataValues.experiences,
         previewDataValues.educations,
         previewDataValues.skills,
         previewDataValues.certifications,
         previewDataValues.languages
-    ).elements;
-    const defaultPages = [{ id: 'p1', elements: defaultElements }];
+    );
+    const defaultPages = template.pages;
 
     const submit = (e) => {
         e.preventDefault();
@@ -88,7 +88,6 @@ export default function Create({ auth, templates, template_id, data: previewData
                                             {template.slug === 'modern' || true ? ( // Fallback to Premium for now
                                                 <KonvaPreview
                                                     pages={defaultPages}
-                                                    elements={defaultElements}
                                                     scale={1}
                                                     width={595}
                                                     height={842}

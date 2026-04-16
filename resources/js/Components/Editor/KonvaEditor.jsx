@@ -1186,6 +1186,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                             onFitToPage={() => stageRef.current?.fitToPage()}
                             onToggleGrid={() => setShowGrid(!showGrid)}
                             showGrid={showGrid}
+                            totalPages={pages.length}
                         />
                     </div>
                 </div>

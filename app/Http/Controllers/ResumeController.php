@@ -60,6 +60,7 @@ class ResumeController extends Controller
                 'skills' => $user->skills,
                 'certifications' => $user->certifications,
                 'languages' => $user->languages,
+                'projects' => $user->projects,
                 'resume' => new Resume(), // Empty resume object for template to consume safely
             ]
         ]);
@@ -113,6 +114,7 @@ class ResumeController extends Controller
         $skills = $user->skills;
         $certifications = $user->certifications;
         $languages = $user->languages;
+        $projects = $user->projects;
         
         return \Inertia\Inertia::render('Resumes/Show', [
             'resume' => $resume,
@@ -125,6 +127,7 @@ class ResumeController extends Controller
                 'skills' => $user->skills,
                 'certifications' => $user->certifications,
                 'languages' => $user->languages,
+                'projects' => $user->projects,
             ]
         ]);
     }
@@ -134,7 +137,7 @@ class ResumeController extends Controller
         $this->authorize('view', $resume);
         
         $resume->load('template');
-        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages', 'projects']);
 
         return \Inertia\Inertia::render('Resumes/Preview', [
             'resume' => $resume,
@@ -148,6 +151,7 @@ class ResumeController extends Controller
                 'skills' => $user->skills,
                 'certifications' => $user->certifications,
                 'languages' => $user->languages,
+                'projects' => $user->projects,
             ]
         ]);
     }
@@ -162,7 +166,7 @@ class ResumeController extends Controller
         }
 
         $resume->load('template');
-        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages', 'projects']);
 
         // Fetch user uploads from disk
         $uploads = [];
@@ -183,6 +187,7 @@ class ResumeController extends Controller
             'skills' => $user->skills,
             'certifications' => $user->certifications,
             'languages' => $user->languages,
+            'projects' => $user->projects,
             'userUploads' => $uploads
         ]);
     }
@@ -191,7 +196,7 @@ class ResumeController extends Controller
     {
         $this->authorize('view', $resume);
         $resume->load('template');
-        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages', 'projects']);
         
         return \Inertia\Inertia::render('Resumes/Preview', [
             'resume' => $resume,
@@ -205,6 +210,7 @@ class ResumeController extends Controller
                 'skills' => $user->skills,
                 'certifications' => $user->certifications,
                 'languages' => $user->languages,
+                'projects' => $user->projects,
             ]
         ]);
     }

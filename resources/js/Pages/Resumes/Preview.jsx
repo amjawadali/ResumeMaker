@@ -35,7 +35,7 @@ export default function Preview({ resume, mode = 'preview', data }) {
                 <KonvaPreview
                     pages={pages}
                     elements={elements}
-                    scale={mode === 'card' ? 0.25 : 1}
+                    scale={1}
                     width={PAGE_WIDTH}
                     height={PAGE_HEIGHT}
                 />

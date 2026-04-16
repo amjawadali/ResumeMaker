@@ -1,23 +1,17 @@
 /**
- * Konva Template Loader - Premium Executive Template
- * Smartly converts user profile data to a well-organized Konva JSON layout.
- *
- * Key features:
- *  - Dynamic Y-position tracker so sections never overlap
- *  - Proper date formatting (ISO → "Mar 2019")
- *  - Intelligent text height estimation for multi-line content
- *  - All sections: Contact, Skills, Languages, Experience, Education, Certifications
+ * Konva Template Loader - Premium Executive Template (Jawad Ali Design)
+ * Matches the provided screenshots exactly.
+ * 
+ * Features:
+ * - Page 1: Sidebar (Contacts, Education) + Main (Name, Summary, Experience)
+ * - Page 2+: Full-width layout for Projects and Skills
+ * - Smart text wrapping and pagination
  */
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Formats an ISO/date string to "Mon YYYY" (e.g. "Mar 2019").
- * Returns the raw value if parsing fails.
- */
 const formatDate = (dateStr) => {
     if (!dateStr) return '';
-    // Already a simple year like "2021" or human text like "Present"
     if (/^\d{4}$/.test(dateStr) || /present/i.test(dateStr)) return dateStr;
     try {
         const d = new Date(dateStr);
@@ -28,9 +22,6 @@ const formatDate = (dateStr) => {
     }
 };
 
-/**
- * Builds a readable date range string.
- */
 const dateRange = (start, end, isCurrent = false) => {
     const s = formatDate(start);
     const e = isCurrent ? 'Present' : formatDate(end);
@@ -39,28 +30,33 @@ const dateRange = (start, end, isCurrent = false) => {
     return `${s} – ${e}`;
 };
 
-/**
- * Estimates rendered text height for Konva text nodes.
- * Uses character-per-line heuristic based on width, fontSize, and lineHeight.
- */
 const estimateTextHeight = (text, fontSize, lineHeight = 1.4, maxWidth = 295) => {
     if (!text) return fontSize * lineHeight;
-    const charsPerLine = Math.floor(maxWidth / (fontSize * 0.55));
+    // Estimate based on characters and explicit newlines
     const lines = text.split('\n');
-    let totalLines = 0;
+    let totalLineCount = 0;
+    const charsPerLine = Math.floor(maxWidth / (fontSize * 0.45)); // MORE CONSERVATIVE factor
+    
     lines.forEach(line => {
-        totalLines += Math.max(1, Math.ceil((line.length || 1) / charsPerLine));
+        const wrappedLines = Math.max(1, Math.ceil((line.trim().length + 2) / charsPerLine));
+        totalLineCount += wrappedLines;
     });
-    return totalLines * fontSize * lineHeight;
+    
+    return totalLineCount * fontSize * lineHeight;
 };
 
-/**
- * Composes an address from user detail fields.
- */
-const buildAddress = (ud) => {
-    if (!ud) return 'New York, NY';
-    const parts = [ud.city, ud.state, ud.country].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'New York, NY';
+const formatBullets = (text) => {
+    if (!text) return '';
+    return text.split('\n').map(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
+            return trimmed;
+        }
+        if (trimmed.startsWith('o') || trimmed.startsWith('+')) {
+            return '    ' + trimmed;
+        }
+        return '• ' + trimmed;
+    }).join('\n');
 };
 
 // ─── Template Builder ──────────────────────────────────────────────────────────
@@ -71,309 +67,287 @@ export const createPremiumTemplate = (
     educations = [],
     skills = [],
     certifications = [],
-    languages = []
+    languages = [],
+    projects = []
 ) => {
     // ─── Layout Constants ──────────────────────────────────────────────────────
-    const PAGE_WIDTH = 595;
+    const PAGE_WIDTH  = 595;
     const PAGE_HEIGHT = 842;
-    const SIDEBAR_W = 220;
-    const PAD = 40;          // main content left/right padding from edges
-    const MAIN_X = SIDEBAR_W + PAD;
-    const MAIN_W = PAGE_WIDTH - SIDEBAR_W - PAD * 2;
-    const SIDEBAR_PAD = 22;
+    const PAD         = 40;
+    
+    // Page 1 Layout (Sidebar)
+    const SIDEBAR_W   = 180;
+    const MAIN_X      = SIDEBAR_W + PAD + 10;
+    const MAIN_W      = PAGE_WIDTH - MAIN_X - PAD;
+    
+    // Page 2+ Layout (Full Width)
+    const FULL_W      = PAGE_WIDTH - PAD * 2;
 
-    // ─── Color Palette ─────────────────────────────────────────────────────────
-    const cBg       = '#0f172a';
+    // ─── Color Palette (Premium Minimalist) ────────────────────────────────────
+    const cBlack    = '#000000';
     const cWhite    = '#ffffff';
-    const cMuted    = '#cbd5e1';
-    const cAccent   = '#4f46e5';
-    const cHeading  = '#1e293b';
-    const cBody     = '#475569';
-    const cSub      = '#64748b';
+    const cGray     = '#71717a'; // Muted text
+    const cLine     = '#e4e4e7'; // Horizontal lines
+    
+    const pages = [];
+    let currentElements = [];
+    let curY = PAD;
+    let isFirstPage = true;
 
-    let elements = [];
+    // ─── Utility: Section Header ──────────────────────────────────────────────
+    const addSectionHeader = (label, x, y, width) => {
+        currentElements.push({
+            id: `header-${label.toLowerCase().replace(/\s/g, '-')}-${pages.length}`,
+            type: 'text', text: label.toUpperCase(), x, y, width,
+            fontSize: 12, fontFamily: 'Inter', fontStyle: '800', fill: cBlack,
+            letterSpacing: 1
+        });
+        currentElements.push({
+            id: `line-${label.toLowerCase().replace(/\s/g, '-')}-${pages.length}`,
+            type: 'rect', x, y: y + 16, width, height: 1, fill: cGray
+        });
+        return y + 35;
+    };
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  SIDEBAR (left column – fixed layout)
-    // ═══════════════════════════════════════════════════════════════════════════
+    const startNextPage = () => {
+        const pageId = `p-${pages.length + 1}`;
+        const pageElements = [];
+        pages.push({ id: pageId, elements: pageElements });
+        currentElements = pageElements;
+        curY = PAD;
+        isFirstPage = pages.length === 1;
+        return pageId;
+    };
 
-    // Background
-    elements.push({
-        id: 'sidebar-bg', type: 'rect', semantic: 'decoration',
-        x: 0, y: 0, width: SIDEBAR_W, height: PAGE_HEIGHT,
-        fill: cBg, draggable: false, selectable: false
-    });
+    // ─── START PAGE 1 ────────────────────────────────────────────────────────
+    startNextPage();
 
+    // ─── Header (Name & Photo) ──────────────────────────────────────────────
     // Profile Photo
-    elements.push({
+    currentElements.push({
         id: 'profile-photo', type: 'image', semantic: 'profile_photo',
-        x: (SIDEBAR_W - 110) / 2, y: 35, width: 110, height: 110,
-        src: userDetail?.profile_photo_url || 'https://placehold.co/110',
-        cornerRadius: 55, stroke: cAccent, strokeWidth: 3
+        x: PAD, y: PAD, width: 100, height: 100,
+        src: userDetail?.profile_photo_url || 'https://placehold.co/100',
+        cornerRadius: 50
     });
 
-    let sideY = 165; // running Y for sidebar sections
-
-    // ── Helper: add sidebar section heading with underline ──
-    const addSidebarSection = (id, label) => {
-        elements.push({
-            id: `${id}-header`, type: 'text', semantic: 'section_header',
-            x: SIDEBAR_PAD, y: sideY, text: label,
-            fontSize: 11, fontFamily: 'Inter', fontStyle: '800',
-            fill: cWhite, letterSpacing: 2
-        });
-        elements.push({
-            id: `${id}-line`, type: 'rect', semantic: 'decoration',
-            x: SIDEBAR_PAD, y: sideY + 16, width: 28, height: 2, fill: cAccent
-        });
-        sideY += 28;
-    };
-
-    // ── CONTACT ────────────────────────────────────────────────────────────────
-    addSidebarSection('contact', 'CONTACT');
-
-    const contactItems = [
-        userDetail?.phone || '+1 234 567 8900',
-        userDetail?.email || 'hello@example.com',
-        buildAddress(userDetail),
-        userDetail?.website || null,
-        userDetail?.linkedin || null
-    ].filter(Boolean);
-
-    contactItems.forEach((text, i) => {
-        elements.push({
-            id: `contact-${i}`, type: 'text', semantic: 'contact_info',
-            x: SIDEBAR_PAD, y: sideY, width: SIDEBAR_W - SIDEBAR_PAD * 2,
-            text, fontSize: 9, fontFamily: 'Inter', fill: cMuted, lineHeight: 1.3
-        });
-        // estimate height of this line
-        const h = estimateTextHeight(text, 9, 1.3, SIDEBAR_W - SIDEBAR_PAD * 2);
-        sideY += Math.max(14, h + 3);
+    // Name & Title
+    const nameText = (userDetail?.full_name || 'JAWAD ALI').toUpperCase();
+    currentElements.push({
+        id: 'full_name', type: 'text', semantic: 'full_name',
+        x: MAIN_X, y: PAD + 10, width: MAIN_W,
+        text: nameText, fontSize: 32, fontFamily: 'Inter', fontStyle: '900',
+        fill: '#18181b', letterSpacing: 1
+    });
+    
+    currentElements.push({
+        id: 'job_title', type: 'text', semantic: 'position',
+        x: MAIN_X, y: PAD + 55, width: MAIN_W,
+        text: experiences?.[0]?.position || 'Web Developer',
+        fontSize: 16, fontFamily: 'Inter', fontStyle: '500', fill: cGray
     });
 
-    sideY += 10;
+    curY = PAD + 130;
 
-    // ── EXPERTISE (Skills) ─────────────────────────────────────────────────────
-    const skillList = (skills && skills.length > 0 ? skills : [
-        { name: 'UI/UX Design' }, { name: 'React & Vue' },
-        { name: 'Node.js' }, { name: 'Project Management' }
-    ]).slice(0, 10);
+    // ─── Contacts & About Me (Side-by-Side) ───────────────────────────────
+    let sY = curY;
+    let mY = curY;
 
-    if (skillList.length > 0) {
-        addSidebarSection('skills', 'EXPERTISE');
-        skillList.forEach((skill, i) => {
-            elements.push({
-                id: `skill-${i}`, type: 'text', semantic: 'skill_name',
-                x: SIDEBAR_PAD, y: sideY, width: SIDEBAR_W - SIDEBAR_PAD * 2,
-                text: `•  ${skill.name}`, fontSize: 9, fontFamily: 'Inter', fill: cMuted
-            });
-            sideY += 17;
+    // Contacts
+    sY = addSectionHeader('CONTACTS', PAD, sY, SIDEBAR_W);
+    const contacts = [
+        { text: userDetail?.phone || '03109865343', icon: '📞' },
+        { text: userDetail?.email || 'codewithjawad@gmail.com', icon: '✉️' },
+        { text: userDetail?.linkedin || 'jawadaliweb', icon: '🔗' }
+    ];
+    contacts.forEach((c, i) => {
+        currentElements.push({
+            id: `contact-icon-${i}`, type: 'text',
+            x: PAD, y: sY, width: 20,
+            text: c.icon, fontSize: 10, fontFamily: 'Inter', fill: cGray
         });
-        sideY += 10;
-    }
-
-    // ── LANGUAGES ──────────────────────────────────────────────────────────────
-    const langList = (languages && languages.length > 0 ? languages : []).slice(0, 5);
-
-    if (langList.length > 0) {
-        addSidebarSection('lang', 'LANGUAGES');
-        langList.forEach((lang, i) => {
-            elements.push({
-                id: `lang-${i}`, type: 'text', semantic: 'language',
-                x: SIDEBAR_PAD, y: sideY, width: SIDEBAR_W - SIDEBAR_PAD * 2,
-                text: `${lang.name}  —  ${lang.proficiency}`,
-                fontSize: 9, fontFamily: 'Inter', fill: cMuted
-            });
-            sideY += 17;
+        currentElements.push({
+            id: `contact-text-${i}`, type: 'text',
+            x: PAD + 20, y: sY, width: SIDEBAR_W - 20,
+            text: c.text, fontSize: 9.5, fontFamily: 'Inter', fontStyle: '500', fill: '#18181b'
         });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MAIN CONTENT (right column – dynamic flow)
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    let mainY = PAD; // running Y tracker for main content
-
-    // ── Helper: add main section heading with underline ──
-    const addMainSection = (id, label) => {
-        mainY += 8; // breathing room before header
-        elements.push({
-            id: `${id}-header`, type: 'text', semantic: 'section_header',
-            x: MAIN_X, y: mainY, text: label,
-            fontSize: 13, fontFamily: 'Inter', fontStyle: '900',
-            fill: cHeading, letterSpacing: 1.5
-        });
-        elements.push({
-            id: `${id}-hline`, type: 'rect', semantic: 'decoration',
-            x: MAIN_X, y: mainY + 18, width: 36, height: 3, fill: cAccent
-        });
-        mainY += 30;
-    };
-
-    // ── NAME ───────────────────────────────────────────────────────────────────
-    const fullName = (userDetail?.full_name || 'YOUR NAME').toUpperCase();
-    elements.push({
-        id: 'name', type: 'text', semantic: 'full_name',
-        x: MAIN_X, y: mainY, width: MAIN_W,
-        text: fullName, fontSize: 26, fontFamily: 'Inter',
-        fontStyle: '900', fill: cHeading, letterSpacing: 1
+        sY += 20;
     });
-    mainY += 32;
 
-    // ── PROFESSIONAL TITLE ────────────────────────────────────────────────────
-    const title = (experiences?.[0]?.position || 'Professional Title').toUpperCase();
-    elements.push({
-        id: 'position', type: 'text', semantic: 'position',
-        x: MAIN_X, y: mainY, width: MAIN_W,
-        text: title, fontSize: 11, fontFamily: 'Inter',
-        fontStyle: '700', fill: cAccent, letterSpacing: 1.2
+    // About Me
+    mY = addSectionHeader('ABOUT ME', MAIN_X, mY, MAIN_W);
+    const summary = userDetail?.professional_summary || '';
+    const sumH = estimateTextHeight(summary, 9.5, 1.5, MAIN_W);
+    currentElements.push({
+        id: 'summary', type: 'text',
+        x: MAIN_X, y: mY, width: MAIN_W,
+        text: summary, fontSize: 9.5, fontFamily: 'Inter', fill: '#27272a',
+        lineHeight: 1.5, align: 'justify'
     });
-    mainY += 20;
+    mY += sumH + 30;
 
-    // ── Thin separator ─────────────────────────────────────────────────────────
-    elements.push({
-        id: 'name-sep', type: 'rect', semantic: 'decoration',
-        x: MAIN_X, y: mainY, width: MAIN_W, height: 1, fill: '#e2e8f0'
-    });
-    mainY += 12;
+    // Synchronize curY
+    curY = Math.max(sY, mY) + 20;
 
-    // ── PROFESSIONAL SUMMARY ──────────────────────────────────────────────────
-    const summary = userDetail?.professional_summary ||
-        'An innovative professional with a passion for designing and building exceptional digital experiences.';
-    const summaryH = estimateTextHeight(summary, 9, 1.6, MAIN_W);
-    elements.push({
-        id: 'summary-text', type: 'text', semantic: 'professional_summary',
-        x: MAIN_X, y: mainY, width: MAIN_W,
-        text: summary, fontSize: 9, fontFamily: 'Inter',
-        fill: cBody, lineHeight: 1.6
-    });
-    mainY += summaryH + 8;
+    // ─── Education (Sequential Block) ─────────────────────────────────────
+    curY = addSectionHeader('EDUCATION', PAD, curY, PAGE_WIDTH - PAD * 2);
+    educations.forEach((edu, i) => {
+        const dateText = dateRange(edu.start_date, edu.end_date, edu.currently_studying);
+        const eduH = estimateTextHeight(edu.description, 9, 1.4, MAIN_W);
+        const blockH = Math.max(40, eduH + 10);
 
-    // ── WORK EXPERIENCE ───────────────────────────────────────────────────────
-    const expList = (experiences && experiences.length > 0 ? experiences : [
-        {
-            position: 'Senior Product Designer',
-            company: 'TechNova Solutions',
-            start_date: '2021-01-01',
-            end_date: null,
-            currently_working: true,
-            responsibilities: '• Led the UI/UX redesign of the flagship SaaS platform.\n• Managed a cross-functional team of 5 designers.'
-        },
-    ]).slice(0, 3);
-
-    if (expList.length > 0) {
-        addMainSection('exp', 'WORK EXPERIENCE');
-
-        expList.forEach((exp, i) => {
-            const dates = dateRange(exp.start_date, exp.end_date, exp.currently_working);
-
-            // Title
-            elements.push({
-                id: `exp-title-${i}`, type: 'text', semantic: 'experience_title',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: exp.position, fontSize: 11, fontFamily: 'Inter',
-                fontStyle: '900', fill: cHeading
-            });
-            mainY += 15;
-
-            // Company + dates
-            elements.push({
-                id: `exp-company-${i}`, type: 'text', semantic: 'experience_company',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: `${exp.company}  |  ${dates}`,
-                fontSize: 9, fontFamily: 'Inter', fontStyle: '600', fill: cSub
-            });
-            mainY += 15;
-
-            // Description / Responsibilities
-            if (exp.responsibilities) {
-                const descH = estimateTextHeight(exp.responsibilities, 9, 1.5, MAIN_W);
-                elements.push({
-                    id: `exp-desc-${i}`, type: 'text', semantic: 'experience_description',
-                    x: MAIN_X, y: mainY, width: MAIN_W,
-                    text: exp.responsibilities, fontSize: 9, fontFamily: 'Inter',
-                    fill: cBody, lineHeight: 1.5
-                });
-                mainY += descH + 4;
-            }
-
-            mainY += 8; // gap between entries
-        });
-    }
-
-    // ── EDUCATION ──────────────────────────────────────────────────────────────
-    const eduList = (educations && educations.length > 0 ? educations : [
-        {
-            degree: 'B.S. in Computer Science',
-            institution: 'University of Technology',
-            start_date: '2014-09-01',
-            end_date: '2018-06-01'
+        if (curY + blockH > PAGE_HEIGHT - PAD) {
+            startNextPage();
+            curY = addSectionHeader('EDUCATION (CONTINUED)', PAD, curY, PAGE_WIDTH - PAD * 2);
         }
-    ]).slice(0, 3);
 
-    if (eduList.length > 0) {
-        addMainSection('edu', 'EDUCATION');
+        // Left Side: Date & Degree
+        currentElements.push({
+            id: `edu-date-${i}`, type: 'text',
+            x: PAD, y: curY, width: SIDEBAR_W,
+            text: dateText, fontSize: 9, fontFamily: 'Inter', fontStyle: '700', fill: cGray
+        });
+        currentElements.push({
+            id: `edu-deg-${i}`, type: 'text',
+            x: PAD, y: curY + 14, width: SIDEBAR_W,
+            text: edu.degree, fontSize: 10, fontFamily: 'Inter', fontStyle: '700', fill: cBlack
+        });
 
-        eduList.forEach((edu, i) => {
-            const dates = dateRange(edu.start_date, edu.end_date, edu.currently_studying);
+        // Right Side: Institution & Description
+        currentElements.push({
+            id: `edu-inst-${i}`, type: 'text',
+            x: MAIN_X, y: curY, width: MAIN_W,
+            text: edu.institution, fontSize: 11, fontFamily: 'Inter', fontStyle: '800', fill: cBlack
+        });
+        currentElements.push({
+            id: `edu-desc-${i}`, type: 'text',
+            x: MAIN_X, y: curY + 16, width: MAIN_W,
+            text: edu.description, fontSize: 9, fontFamily: 'Inter', fill: '#3f3f46',
+            lineHeight: 1.4
+        });
 
-            // Degree
-            elements.push({
-                id: `edu-degree-${i}`, type: 'text', semantic: 'education_degree',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: edu.degree + (edu.field_of_study ? ` in ${edu.field_of_study}` : ''),
-                fontSize: 11, fontFamily: 'Inter', fontStyle: '900', fill: cHeading
-            });
-            mainY += 15;
+        curY += blockH + 20;
+    });
 
-            // Institution + dates
-            elements.push({
-                id: `edu-inst-${i}`, type: 'text', semantic: 'education_institution',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: `${edu.institution}  |  ${dates}`,
-                fontSize: 9, fontFamily: 'Inter', fontStyle: '600', fill: cSub
-            });
-            mainY += 15;
+    // ─── Experience (Sequential Block) ────────────────────────────────────
+    curY = addSectionHeader('EXPERIENCE', PAD, curY, PAGE_WIDTH - PAD * 2);
+    experiences.forEach((exp, i) => {
+        const dateStr = dateRange(exp.start_date, exp.end_date, exp.currently_working);
+        const formattedResponsibilities = formatBullets(exp.responsibilities);
+        const expH = estimateTextHeight(formattedResponsibilities, 9, 1.5, MAIN_W);
+        const blockH = Math.max(50, expH + 25);
 
-            // Optional GPA
-            if (edu.gpa) {
-                elements.push({
-                    id: `edu-gpa-${i}`, type: 'text', semantic: 'education_gpa',
-                    x: MAIN_X, y: mainY, width: MAIN_W,
-                    text: `GPA: ${edu.gpa}`, fontSize: 9, fontFamily: 'Inter',
-                    fill: cBody
-                });
-                mainY += 14;
+        if (curY + blockH > PAGE_HEIGHT - PAD) {
+            startNextPage();
+            curY = addSectionHeader('EXPERIENCE (CONTINUED)', PAD, curY, PAGE_WIDTH - PAD * 2);
+        }
+
+        // Left Side: Date & Company
+        currentElements.push({
+            id: `exp-date-${i}`, type: 'text',
+            x: PAD, y: curY, width: SIDEBAR_W,
+            text: dateStr, fontSize: 9, fontFamily: 'Inter', fontStyle: '700', fill: cGray
+        });
+        currentElements.push({
+            id: `exp-comp-${i}`, type: 'text',
+            x: PAD, y: curY + 14, width: SIDEBAR_W,
+            text: exp.company, fontSize: 10, fontFamily: 'Inter', fontStyle: '800', fill: cBlack
+        });
+
+        // Right Side: Position & Responsibilities
+        currentElements.push({
+            id: `exp-pos-${i}`, type: 'text',
+            x: MAIN_X, y: curY, width: MAIN_W,
+            text: exp.position, fontSize: 11, fontFamily: 'Inter', fontStyle: '800', fill: cBlack
+        });
+
+        currentElements.push({
+            id: `exp-desc-${i}`, type: 'text',
+            x: MAIN_X, y: curY + 16, width: MAIN_W,
+            text: formattedResponsibilities, fontSize: 9, fontFamily: 'Inter', fill: '#18181b',
+            lineHeight: 1.5
+        });
+
+        curY += blockH + 15;
+    });
+
+    // ─── PROJECTS (PAGE 2+) ──────────────────────────────────────────────────
+    if (curY > PAGE_HEIGHT / 2 || isFirstPage) {
+        startNextPage();
+        curY = PAD;
+    }
+
+    // ─── Project Sequential Logic ─────────────────────────────────────────
+    if (pages.length === 1 || curY > PAGE_HEIGHT * 0.6) {
+        startNextPage();
+    }
+
+    curY = addSectionHeader('PROJECTS', PAD, curY, PAGE_WIDTH - PAD * 2);
+
+    const groupedProjects = (projects || []).reduce((acc, p) => {
+        const cat = p.technologies || 'General';
+        if (!acc[cat]) acc[cat] = [];
+        acc[cat].push(p);
+        return acc;
+    }, {});
+
+    Object.entries(groupedProjects).forEach(([cat, projs]) => {
+        currentElements.push({
+            id: `proj-cat-${cat.replace(/\s/g, '-')}`, type: 'text',
+            x: PAD, y: curY, width: PAGE_WIDTH - PAD * 2,
+            text: cat, fontSize: 12, fontFamily: 'Inter', fontStyle: '800', fill: cBlack
+        });
+        curY += 25;
+
+        projs.forEach((proj, i) => {
+            const description = formatBullets(proj.description || '');
+            const descH = estimateTextHeight(description, 9, 1.4, PAGE_WIDTH - PAD * 2 - 30);
+            const blockH = descH + 40;
+
+            if (curY + blockH > PAGE_HEIGHT - PAD) {
+                startNextPage();
+                curY = addSectionHeader('PROJECTS (CONTINUED)', PAD, curY, PAGE_WIDTH - PAD * 2);
             }
 
-            mainY += 6;
+            currentElements.push({
+                id: `proj-title-${cat}-${i}-${pages.length}`, type: 'text',
+                x: PAD + 10, y: curY, width: PAGE_WIDTH - PAD * 2 - 20,
+                text: `${proj.title} (${proj.url || ''})`,
+                fontSize: 10, fontFamily: 'Inter', fontStyle: '800', fill: cBlack
+            });
+            curY += 18;
+
+            currentElements.push({
+                id: `proj-desc-${cat}-${i}-${pages.length}`, type: 'text',
+                x: PAD + 25, y: curY, width: PAGE_WIDTH - PAD * 2 - 40,
+                text: description, fontSize: 9, fontFamily: 'Inter', fill: '#18181b',
+                lineHeight: 1.4
+            });
+            curY += descH + 15;
         });
+    });
+
+    if (curY > PAGE_HEIGHT - 150) {
+        startNextPage();
+    } else {
+        curY += 30;
     }
 
-    // ── CERTIFICATIONS ────────────────────────────────────────────────────────
-    const certList = (certifications && certifications.length > 0 ? certifications : []).slice(0, 6);
+    curY = addSectionHeader('SKILLS', PAD, curY, PAGE_WIDTH - PAD * 2);
 
-    if (certList.length > 0) {
-        addMainSection('cert', 'CERTIFICATIONS');
-
-        certList.forEach((cert, i) => {
-            elements.push({
-                id: `cert-name-${i}`, type: 'text', semantic: 'certification_name',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: cert.name, fontSize: 10, fontFamily: 'Inter',
-                fontStyle: '700', fill: cHeading
-            });
-            mainY += 14;
-
-            elements.push({
-                id: `cert-org-${i}`, type: 'text', semantic: 'certification_org',
-                x: MAIN_X, y: mainY, width: MAIN_W,
-                text: `${cert.issuing_organization}  |  ${formatDate(cert.issue_date)}`,
-                fontSize: 9, fontFamily: 'Inter', fill: cSub
-            });
-            mainY += 18;
+    const fullWForSkills = PAGE_WIDTH - PAD * 2;
+    const colW = fullWForSkills / 4;
+    skills.forEach((skill, i) => {
+        const col = i % 4;
+        const row = Math.floor(i / 4);
+        const sX = PAD + (col * colW);
+        const sY_skill = curY + (row * 18);
+        currentElements.push({
+            id: `skill-${i}-${pages.length}`, type: 'text',
+            x: sX, y: sY_skill, width: colW - 5,
+            text: `• ${skill.name}`, fontSize: 9, fontFamily: 'Inter', fill: '#18181b'
         });
-    }
+    });
 
-    return { elements };
+    return { pages };
 };

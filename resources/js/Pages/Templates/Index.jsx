@@ -6,8 +6,9 @@ import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 import ScaleFit from '@/Components/ScaleFit';
 
 export default function Index({ auth, templates }) {
-    const defaultElements = createPremiumTemplate().elements;
-    const defaultPages = [{ id: 'p1', elements: defaultElements }];
+    const templateData = createPremiumTemplate();
+    const defaultPages = templateData.pages;
+    const defaultElements = templateData.pages[0]?.elements || [];
     return (
         <AuthenticatedLayout user={auth.user}>
             <Head title="Browse Templates" />

@@ -13,6 +13,7 @@ export default function Edit({
     skills,
     certifications,
     languages,
+    projects,
     userUploads: initialUploads
 }) {
     const [resumeTitle, setResumeTitle] = useState(resume.title);
@@ -23,7 +24,7 @@ export default function Edit({
         if (resume.canvas_state && (resume.canvas_state.pages || resume.canvas_state.elements)) {
             setInitialData(resume.canvas_state);
         } else {
-            const template = createPremiumTemplate(userDetail, experiences, educations, skills, certifications, languages);
+            const template = createPremiumTemplate(userDetail, experiences, educations, skills, certifications, languages, projects);
             setInitialData(template);
         }
     }, []);

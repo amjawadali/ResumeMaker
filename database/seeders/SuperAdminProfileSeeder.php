@@ -38,96 +38,61 @@ class SuperAdminProfileSeeder extends Seeder
         // 1. Personal Information
         UserDetail::create([
             'user_id' => $userId,
-            'full_name' => 'John Carter (Admin)',
-            'email' => 'admin@resumemaker.com',
-            'phone' => '+1 (555) 123-4567',
-            'address' => '123 Innovation Drive, Tech District',
-            'city' => 'San Francisco',
-            'state' => 'CA',
-            'zip_code' => '94105',
-            'country' => 'United States',
-            'website' => 'https://johncarter.dev',
-            'linkedin' => 'linkedin.com/in/johncarter',
-            'github' => 'github.com/johncarter',
-            'twitter' => '@johncartertech',
-            'professional_summary' => 'Highly accomplished Senior Full Stack Engineer and Systems Architect with over 10 years of experience in designing, building, and scaling high-performance web applications. Proven track record of leading cross-functional teams to deliver enterprise-grade software solutions using modern PHP and JavaScript ecosystems. Passionate about cloud architecture, clean code principles, and mentoring the next generation of software engineers.',
+            'full_name' => 'JAWAD ALI',
+            'email' => 'codewithjawad@gmail.com',
+            'phone' => '03109865343',
+            'address' => 'Peshawar, Pakistan',
+            'city' => 'Peshawar',
+            'state' => 'KP',
+            'zip_code' => '25000',
+            'country' => 'Pakistan',
+            'website' => 'https://jawadali.web',
+            'linkedin' => 'linkedin.com/in/jawadaliweb',
+            'github' => 'github.com/jawadaliweb',
+            'profile_photo' => 'uploads/1_1768067111_e17534de1aa041333614de16855373cd.jpg',
+            'professional_summary' => "I'm Jawad Ali, a dedicated and passionate Web Developer with around 5.2 years of overall experience (2.2 years full-time and over 4 years part-time). I have worked extensively with Laravel, CodeIgniter, and WordPress, developing scalable web applications, APIs, and clean, mobile-friendly websites. My focus is on delivering efficient, user-friendly solutions that enhance system performance and communication. Currently, I'm working full-time and seeking opportunities to grow further, take on challenging projects, and contribute to meaningful, impactful work.",
         ]);
 
-        // 2. Education (Max 3)
-        $educations = [
-            [
-                'institution' => 'Massachusetts Institute of Technology (MIT)',
-                'degree' => 'Master of Science',
-                'field_of_study' => 'Computer Science',
-                'start_date' => '2013-09-01',
-                'end_date' => '2015-06-01',
-                'currently_studying' => false,
-                'gpa' => '3.9',
-                'description' => 'Specialized in Distributed Systems and Advanced Machine Learning. Authored a thesis on scalable microservice architectures.',
-                'order' => 1
-            ],
-            [
-                'institution' => 'Stanford University',
-                'degree' => 'Bachelor of Science',
-                'field_of_study' => 'Software Engineering',
-                'start_date' => '2009-09-01',
-                'end_date' => '2013-06-01',
-                'currently_studying' => false,
-                'gpa' => '3.8',
-                'description' => 'Graduated with Honors. Member of the Stanford Computer Graphics Lab.',
-                'order' => 2
-            ],
-            [
-                'institution' => 'Tech High School Academy',
-                'degree' => 'High School Diploma',
-                'field_of_study' => 'General Sciences',
-                'start_date' => '2005-09-01',
-                'end_date' => '2009-06-01',
-                'currently_studying' => false,
-                'gpa' => '4.0',
-                'description' => 'Valedictorian. Founded the school\'s first coding and robotics club.',
-                'order' => 3
-            ]
-        ];
+        // 2. Education
+        Education::create([
+            'user_id' => $userId,
+            'institution' => 'CECOS University of IT and Emerging Sciences',
+            'degree' => 'BS Computer Science',
+            'field_of_study' => 'Computer Science',
+            'start_date' => '2019-01-01',
+            'end_date' => '2023-12-31',
+            'currently_studying' => false,
+            'description' => 'Gained solid knowledge in programming, web development, databases, and software engineering with hands-on project experience.',
+            'order' => 1
+        ]);
 
-        foreach ($educations as $edu) {
-            $edu['user_id'] = $userId;
-            Education::create($edu);
-        }
-
-        // 3. Experience (Max 3)
+        // 3. Experience
         $experiences = [
             [
-                'company' => 'TechNova Solutions',
-                'position' => 'Principal Software Engineer',
-                'location' => 'San Francisco, CA',
-                'start_date' => '2019-03-01',
+                'company' => 'Softilxx Technologies',
+                'position' => 'Web Developer',
+                'start_date' => '2020-01-01',
                 'end_date' => null,
                 'currently_working' => true,
-                'responsibilities' => "• Architected and developed a massively scalable SaaS platform serving over 2 million active users.\n• Led a team of 15 engineers in migrating a monolithic legacy application to a modern microservices architecture.\n• Implemented robust CI/CD pipelines reducing deployment times by 60%.\n• Collaborated directly with stakeholders to align technical strategy with business objectives.",
-                'achievements' => 'Received the "Innovator of the Year" award in 2022 for optimizing database query performance leading to a 40% reduction in server costs.',
+                'responsibilities' => "• CodeIgniter: Extensively customized Perfex CRM, adding new features and modifying existing modules to meet client requirements to convert it to manufacturing ERP. Developed software for Kanorr Competitor (Crave Noodles) on behalf of Softilxx Technologies.\n• Laravel: Worked with repository pattern, DTO, Custom Routing, Service Pattern. Implemented custom routes, authentication systems, and user dashboards. Integrated role-based access and permissions using Spatie package. Experienced with theme setup, APIs, and modular development to build scalable applications.\n• WordPress: Developed numerous websites for company clients (local & international) including business, property, and e-commerce sites. Skilled in plugin development, theme development, SEO, and custom design implementation.",
                 'order' => 1
             ],
             [
-                'company' => 'CloudFront Integrations',
-                'position' => 'Senior Backend Developer',
-                'location' => 'Austin, TX',
-                'start_date' => '2015-08-01',
-                'end_date' => '2019-02-01',
+                'company' => 'Soft Vendors',
+                'position' => 'Website Designer',
+                'start_date' => '2019-01-01',
+                'end_date' => '2019-06-30',
                 'currently_working' => false,
-                'responsibilities' => "• Designed RESTful APIs handling high-throughput financial transactions.\n• Maintained maximum uptime (99.99%) across critical cloud infrastructure on AWS.\n• Mentored junior developers and conducted extensive code reviews to ensure code quality and security standards.",
-                'achievements' => 'Successfully integrated 3 major third-party payment gateways within a strict 2-month deadline.',
+                'responsibilities' => "• Designed and developed responsive websites using HTML, CSS, and Bootstrap.\n• Created and delivered WordPress training to multiple students.\n• Built and launched projects, including a charity website and other client-based solutions.",
                 'order' => 2
             ],
             [
-                'company' => 'Startup Hub',
-                'position' => 'Full Stack Developer',
-                'location' => 'Seattle, WA',
-                'start_date' => '2013-07-01',
-                'end_date' => '2015-07-01',
+                'company' => 'AlKareem Electronics',
+                'position' => 'IT Support & Web Developer',
+                'start_date' => '2019-08-01',
+                'end_date' => '2020-12-31',
                 'currently_working' => false,
-                'responsibilities' => "• Developed dynamic, responsive web interfaces using React.js and Vue.js.\n• Built and maintained the underlying PHP/Laravel backend system and PostgreSQL databases.\n• Participated in daily Agile stand-ups and sprint planning sessions.",
-                'achievements' => 'Delivered the beta version of the core product 3 weeks ahead of schedule.',
+                'responsibilities' => "• Configured and maintained attendance machines, CCTV systems, and printers.\n• Provided troubleshooting and support for computers and Windows installations.\n• Designed and developed the company website and websites for their clients.",
                 'order' => 3
             ]
         ];
@@ -137,18 +102,56 @@ class SuperAdminProfileSeeder extends Seeder
             Experience::create($exp);
         }
 
-        // 4. Skills (10 skills)
+        // 4. Projects
+        $projects = [
+            [
+                'title' => 'Leasing ERP',
+                'url' => 'Laravel',
+                'description' => "Business Management ERP System: The comprehensive ERP system built in Laravel with Repository Pattern, DTO, Service Layer, Authentication & Authorization, Multi-Branch Support, 3-Layer Chart of Accounts, and Double Entry Accounting System.\n• Accounts Module: Chart of accounts with 3-tier hierarchy, voucher processing, general ledger management, fund transfers, daily expense tracking, opening balances, financial year management, balance sheet, trial balance, profit & loss statements.\n• Inventory Management: Item setup with categories/subcategories, brand management, stock opening balances, stock issue/receive operations, stock transfer and transit tracking, serial number tracking, comprehensive stock reporting.\n• Purchase Management: Supplier setup with group management, purchase price lists, purchase orders and scheduling, down payments, purchase invoicing, supplier payments, purchase returns, supplier ledger and purchase reports.\n• Sales Management: Customer setup with group management, salesman price lists, geographical setup (country/state/city), sales operations (inquiry, quotation, booking), sales invoicing, sales returns, customer reports and profit analysis.\n• Lease Management: Item planning and sale area management, customer processing and verification, delivery management, customer collections, CRC verification, block list management, slow customer tracking.\n• Payroll / HR Module: Employee profile management, department/designation setup, payroll policies, leave types and holiday management, allowance/deduction configuration, attendance tracking, salary calculation and payments, staff advances, employee actions and resignations.\n• Reporting & Analytics: Financial reports (balance sheet, P&L, trial balance), operational reports (stock, sales, purchase), employee ledger, daily cash summary, cross-module analytical reports.",
+                'technologies' => 'Laravel',
+                'order' => 1
+            ],
+            [
+                'title' => 'Perfex CRM Modifications',
+                'url' => 'CodeIgniter',
+                'description' => "• Manufacturing Module: Modified the manufacturing module for over and under consumption and LOT Wise Consumption and time-based cost calculations with Labor cost, operation cost, raw material costs etc.\n• HR Records & HR Payroll Modules: Employee Incentive Configurations, Employee Salary Policy, Sales Commissions Calculations Based On Policy.\n• Sale Module: Secondary Sale (Distributor Sell to Shopkeeper), Secondary Sale involve Stock Received, Return, Execution, Load, Stock Delivery, Return Stock from Shopkeeper.\n• Inventory: The system existing stock calculation from transactions has a bug initially because of wrong transactions in the delivery vouchers / Goods Transaction Table, I have looked / Tested the system deeply and find out the delivery transaction in transaction table isn't happening based on warehouses that's why some warehouse stock gone into minus, so I modified and did on warehouse based.",
+                'technologies' => 'CodeIgniter',
+                'order' => 2
+            ],
+            [
+                'title' => 'Coco ActiveWare',
+                'url' => 'cocoactiveware.com',
+                'description' => "• Ecommerce Website\n• CrocoBlock Jet Engine Used\n• Customized & Dynamic\n• Custom Cart Design",
+                'technologies' => 'WordPress',
+                'order' => 3
+            ],
+            [
+                'title' => 'IVAMobile',
+                'url' => 'ivamobile.com',
+                'description' => "• Responsive Design\n• Elementor & Elementor Pro\n• Custom Coded Page\n• Custom Post Type\n• Custom Fields",
+                'technologies' => 'WordPress',
+                'order' => 4
+            ]
+        ];
+
+        foreach ($projects as $proj) {
+            $proj['user_id'] = $userId;
+            \App\Models\Project::create($proj);
+        }
+
+        // 5. Skills
         $skills = [
-            ['name' => 'Laravel / PHP', 'category' => 'technical', 'proficiency' => 'expert', 'order' => 1],
-            ['name' => 'React & Vue.js', 'category' => 'technical', 'proficiency' => 'expert', 'order' => 2],
-            ['name' => 'System Architecture', 'category' => 'technical', 'proficiency' => 'expert', 'order' => 3],
-            ['name' => 'AWS Cloud Services', 'category' => 'technical', 'proficiency' => 'advanced', 'order' => 4],
-            ['name' => 'Docker & Kubernetes', 'category' => 'technical', 'proficiency' => 'advanced', 'order' => 5],
-            ['name' => 'MySQL / PostgreSQL', 'category' => 'technical', 'proficiency' => 'expert', 'order' => 6],
-            ['name' => 'Agile/Scrum Leadership', 'category' => 'soft', 'proficiency' => 'advanced', 'order' => 7],
-            ['name' => 'TypeScript / Node.js', 'category' => 'technical', 'proficiency' => 'advanced', 'order' => 8],
-            ['name' => 'CI/CD Pipelines', 'category' => 'technical', 'proficiency' => 'advanced', 'order' => 9],
-            ['name' => 'Cross-functional Team Mentorship', 'category' => 'soft', 'proficiency' => 'expert', 'order' => 10],
+            ['name' => 'Wordpress', 'category' => 'technical', 'order' => 1],
+            ['name' => 'Laravel', 'category' => 'technical', 'order' => 2],
+            ['name' => 'HTML', 'category' => 'technical', 'order' => 3],
+            ['name' => 'CSS', 'category' => 'technical', 'order' => 4],
+            ['name' => 'Javascript', 'category' => 'technical', 'order' => 5],
+            ['name' => 'PHP', 'category' => 'technical', 'order' => 6],
+            ['name' => 'MYSQL', 'category' => 'technical', 'order' => 7],
+            ['name' => 'Jquery', 'category' => 'technical', 'order' => 8],
+            ['name' => 'Problem Solving', 'category' => 'soft', 'order' => 9],
+            ['name' => 'Communication', 'category' => 'soft', 'order' => 10],
+            ['name' => 'Team Work', 'category' => 'soft', 'order' => 11],
         ];
 
         foreach ($skills as $skill) {
@@ -156,33 +159,11 @@ class SuperAdminProfileSeeder extends Seeder
             Skill::create($skill);
         }
 
-        // 5. Certifications (10 certificates)
-        $certifications = [
-            ['name' => 'AWS Certified Solutions Architect – Professional', 'issuing_organization' => 'Amazon Web Services', 'issue_date' => '2023-01-15', 'expiry_date' => '2026-01-15', 'order' => 1],
-            ['name' => 'Certified Kubernetes Administrator (CKA)', 'issuing_organization' => 'Cloud Native Computing Foundation', 'issue_date' => '2022-05-10', 'expiry_date' => '2025-05-10', 'order' => 2],
-            ['name' => 'Laravel Certification', 'issuing_organization' => 'Laravel LLC', 'issue_date' => '2020-11-20', 'expiry_date' => null, 'order' => 3],
-            ['name' => 'Professional Scrum Master (PSM I)', 'issuing_organization' => 'Scrum.org', 'issue_date' => '2019-08-05', 'expiry_date' => null, 'order' => 4],
-            ['name' => 'Google Cloud Associate Cloud Engineer', 'issuing_organization' => 'Google Cloud', 'issue_date' => '2021-03-12', 'expiry_date' => '2024-03-12', 'order' => 5],
-            ['name' => 'Meta Front-End Developer Professional Certificate', 'issuing_organization' => 'Meta / Coursera', 'issue_date' => '2020-02-14', 'expiry_date' => null, 'order' => 6],
-            ['name' => 'ITIL 4 Foundation Certification', 'issuing_organization' => 'AXELOS', 'issue_date' => '2018-09-22', 'expiry_date' => null, 'order' => 7],
-            ['name' => 'CompTIA Security+', 'issuing_organization' => 'CompTIA', 'issue_date' => '2017-06-30', 'expiry_date' => '2020-06-30', 'order' => 8],
-            ['name' => 'Oracle Certified Professional, MySQL 5.7 Database Administrator', 'issuing_organization' => 'Oracle', 'issue_date' => '2016-12-01', 'expiry_date' => null, 'order' => 9],
-            ['name' => 'Zend Certified PHP Engineer', 'issuing_organization' => 'Zend Technologies', 'issue_date' => '2015-04-18', 'expiry_date' => null, 'order' => 10],
-        ];
-
-        foreach ($certifications as $cert) {
-            $cert['user_id'] = $userId;
-            $cert['credential_id'] = 'CRED-' . rand(100000, 999999);
-            Certification::create($cert);
-        }
-
-        // 6. Languages (5 languages)
+        // 6. Languages
         $languages = [
-            ['name' => 'English', 'proficiency' => 'Native', 'order' => 1],
-            ['name' => 'Spanish', 'proficiency' => 'Fluent', 'order' => 2],
-            ['name' => 'French', 'proficiency' => 'Intermediate', 'order' => 3],
-            ['name' => 'German', 'proficiency' => 'Beginner', 'order' => 4],
-            ['name' => 'Mandarin', 'proficiency' => 'Beginner', 'order' => 5],
+            ['name' => 'English', 'proficiency' => 'Fluent', 'order' => 1],
+            ['name' => 'Urdu', 'proficiency' => 'Native', 'order' => 2],
+            ['name' => 'Pashto', 'proficiency' => 'Native', 'order' => 3],
         ];
 
         foreach ($languages as $lang) {
@@ -190,6 +171,22 @@ class SuperAdminProfileSeeder extends Seeder
             Language::create($lang);
         }
 
-        $this->command->info('Super Admin profile seeded successfully!');
+        // 7. Create a default Resume for the admin
+        \App\Models\Resume::create([
+            'user_id' => $userId,
+            'template_id' => 1,
+            'title' => 'My Premium Resume',
+            'sections_visibility' => [
+                'personal_info' => true,
+                'summary' => true,
+                'experience' => true,
+                'education' => true,
+                'skills' => true,
+                'projects' => true,
+            ],
+            'canvas_state' => null // This will trigger createPremiumTemplate on first edit
+        ]);
+
+        $this->command->info('Super Admin profile and default resume seeded successfully!');
     }
 }

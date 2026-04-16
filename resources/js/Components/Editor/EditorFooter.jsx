@@ -1,7 +1,7 @@
 import React from 'react';
 import { Monitor, LayoutGrid, Maximize2, HelpCircle, Minus, Plus } from 'lucide-react';
 
-export default function EditorFooter({ scale, onScaleChange, onFitToPage, onToggleGrid, showGrid }) {
+export default function EditorFooter({ scale, onScaleChange, onFitToPage, onToggleGrid, showGrid, currentPage = 1, totalPages = 1 }) {
     const minScale = 0.1;
     const maxScale = 3.0;
 
@@ -70,7 +70,7 @@ export default function EditorFooter({ scale, onScaleChange, onFitToPage, onTogg
                     </button>
 
                     <div className="text-xs font-medium text-gray-300 tabular-nums">
-                        1 / 1
+                        {currentPage} / {totalPages}
                     </div>
 
                     <div className="flex items-center gap-1">

@@ -120,7 +120,7 @@ export default function Dashboard({ auth, resumes, completion }) {
                             <div key={resume.id} className="group relative flex flex-col h-full">
                                 <div className="resume-card relative w-full rounded-3xl overflow-hidden bg-slate-800 border border-slate-700/50 shadow-2xl transition-all duration-300 hover:shadow-purple-500/20 hover:border-purple-500/30">
                                     <div className="bg-white">
-                                        <ScaleFit width={794} height={1123}>
+                                        <ScaleFit width={595} height={842}>
                                             <iframe
                                                 src={route('resumes.preview', { resume: resume.id, mode: 'card' })}
                                                 className="w-full h-full border-none pointer-events-none"
