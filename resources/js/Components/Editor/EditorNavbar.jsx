@@ -1,7 +1,7 @@
 import { Link } from '@inertiajs/react';
-import { Home, Undo, Redo, Cloud, ChevronDown, Share2, Download, Menu, Trash2, Check } from 'lucide-react';
+import { Home, Undo, Redo, Cloud, ChevronDown, Share2, Download, Menu, Trash2, Check, UploadCloud } from 'lucide-react';
 
-export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDownload, onDelete, onUndo, onRedo, canUndo, canRedo, onHistoryClick }) {
+export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDownload, onDelete, onUndo, onRedo, canUndo, canRedo, onHistoryClick, onPublish }) {
     return (
         <div className="h-14 bg-[#0e1217] text-white flex items-center justify-between px-4 select-none shrink-0 z-50 shadow-md border-b border-white/5">
             {/* Left Section: Home & Menu */}
@@ -97,11 +97,19 @@ export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDow
                 <div className="h-6 w-px bg-white/10 mx-1"></div>
 
                 <button
+                    onClick={onPublish}
+                    className="flex items-center gap-2 bg-[#7D2AE8] text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#6a24c5] active:scale-95 transition-all shadow-lg shadow-purple-900/20"
+                >
+                    <UploadCloud size={16} />
+                    <span>Publish</span>
+                </button>
+
+                <button
                     onClick={onDownload}
                     className="flex items-center gap-2 bg-white text-slate-900 px-5 py-2 rounded-lg font-bold text-sm hover:bg-gray-100 active:scale-95 transition-all shadow-md"
                 >
-                    <Share2 size={16} />
-                    <span>Share</span>
+                    <Download size={16} />
+                    <span>Download</span>
                 </button>
             </div>
         </div>

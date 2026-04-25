@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Search, Image as ImageIcon, Type, Square, Upload, Loader2, Trash2, Circle, Triangle, Star, ArrowRight, Minus, Hexagon, History, RotateCcw, Plus } from 'lucide-react';
+import { X, Search, Image as ImageIcon, Type, Square, Upload, Loader2, Trash2, Circle, Triangle, Star, ArrowRight, Minus, Hexagon, History, RotateCcw, Plus, User, Mail, Phone, MapPin, Briefcase, GraduationCap, Award, Languages } from 'lucide-react';
 
 export default function EditorResourcesDrawer({
     activeTab,
@@ -12,7 +12,8 @@ export default function EditorResourcesDrawer({
     versions = [],
     onSaveVersion,
     onRestoreVersion,
-    onDeleteVersion
+    onDeleteVersion,
+    profile = null
 }) {
     if (!activeTab) return null;
 
@@ -359,7 +360,174 @@ export default function EditorResourcesDrawer({
                         </div>
                     </div>
                 )}
+                
+                {activeTab === 'profile' && profile && (
+                    <div className="space-y-6 pb-20">
+                        {/* Personal Information */}
+                        <div className="space-y-3">
+                            <SectionHeader icon={User} title="Personal Info" />
+                            <div className="grid gap-2">
+                                <ProfileItem 
+                                    label="Full Name" 
+                                    value={profile.userDetail?.full_name} 
+                                    semantic="full_name"
+                                    onAdd={onAddElement}
+                                />
+                                <ProfileItem 
+                                    label="Job Title" 
+                                    value={profile.userDetail?.job_title} 
+                                    semantic="position"
+                                    onAdd={onAddElement}
+                                />
+                                <ProfileItem 
+                                    label="Email" 
+                                    value={profile.userDetail?.email} 
+                                    semantic="email"
+                                    onAdd={onAddElement}
+                                />
+                                <ProfileItem 
+                                    label="Phone" 
+                                    value={profile.userDetail?.phone} 
+                                    semantic="phone"
+                                    onAdd={onAddElement}
+                                />
+                                <ProfileItem 
+                                    label="Location" 
+                                    value={profile.userDetail?.address} 
+                                    semantic="location"
+                                    onAdd={onAddElement}
+                                />
+                                <ProfileItem 
+                                    label="Summary" 
+                                    value={profile.userDetail?.professional_summary} 
+                                    semantic="summary"
+                                    isLongText
+                                    onAdd={onAddElement}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Experience */}
+                        <div className="space-y-3">
+                            <SectionHeader icon={Briefcase} title="Experience" />
+                            <div className="space-y-3">
+                                {profile.experiences?.map((exp, idx) => (
+                                    <div key={exp.id} className="p-3 bg-[#252627] rounded-xl border border-white/5 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">Role {idx + 1}</span>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <ProfileItem label="Position" value={exp.position} semantic="exp_position" onAdd={onAddElement} />
+                                            <ProfileItem label="Company" value={exp.company} semantic="exp_company" onAdd={onAddElement} />
+                                            <ProfileItem label="Location" value={exp.location} semantic="exp_location" onAdd={onAddElement} />
+                                            <ProfileItem label="Period" value={`${exp.start_date} - ${exp.end_date || 'Present'}`} onAdd={onAddElement} />
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!profile.experiences || profile.experiences.length === 0) && (
+                                    <p className="text-[10px] text-gray-500 italic px-1">No experience entries found.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Education */}
+                        <div className="space-y-3">
+                            <SectionHeader icon={GraduationCap} title="Education" />
+                            <div className="space-y-3">
+                                {profile.educations?.map((edu, idx) => (
+                                    <div key={edu.id} className="p-3 bg-[#252627] rounded-xl border border-white/5 space-y-2">
+                                         <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-bold text-teal-400 uppercase tracking-wider">Entry {idx + 1}</span>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <ProfileItem label="Degree" value={edu.degree} semantic="edu_degree" onAdd={onAddElement} />
+                                            <ProfileItem label="School" value={edu.school} semantic="edu_school" onAdd={onAddElement} />
+                                            <ProfileItem label="Period" value={`${edu.start_date} - ${edu.end_date || 'Present'}`} onAdd={onAddElement} />
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!profile.educations || profile.educations.length === 0) && (
+                                    <p className="text-[10px] text-gray-500 italic px-1">No education entries found.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Skills */}
+                        <div className="space-y-3">
+                            <SectionHeader icon={Award} title="Skills" />
+                            <div className="flex flex-wrap gap-2">
+                                {profile.skills?.map((skill) => (
+                                    <button
+                                        key={skill.id}
+                                        onClick={() => onAddElement('text', { text: skill.name, fontSize: 14, semantic: 'skill_name' })}
+                                        className="px-3 py-1.5 bg-[#252627] hover:bg-[#2F3031] border border-white/5 rounded-lg text-xs text-white transition-all"
+                                    >
+                                        {skill.name}
+                                    </button>
+                                ))}
+                                {(!profile.skills || profile.skills.length === 0) && (
+                                    <p className="text-[10px] text-gray-500 italic px-1">No skills found.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {activeTab === 'profile' && !profile && (
+                    <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                        <User size={48} className="text-gray-700" />
+                        <div className="space-y-1">
+                            <p className="text-sm font-bold text-white">Profile Data Unavailable</p>
+                            <p className="text-[11px] text-gray-500 px-10 leading-relaxed">Please complete your profile in the User Details section to use it here.</p>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
+    );
+}
+
+function SectionHeader({ icon: Icon, title }) {
+    return (
+        <div className="flex items-center gap-2 px-1 mb-2">
+            <Icon size={14} className="text-slate-500" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{title}</span>
+        </div>
+    );
+}
+
+function ProfileItem({ label, value, semantic, onAdd, isLongText = false }) {
+    if (!value) return null;
+
+    const truncatedValue = value.length > 40 ? value.substring(0, 37) + '...' : value;
+
+    const handleAdd = () => {
+        onAdd('text', { 
+            text: value, 
+            fontSize: isLongText ? 12 : 16, 
+            semantic: semantic,
+            width: isLongText ? 300 : 200,
+            textAlign: 'left'
+        });
+    };
+
+    return (
+        <button
+            draggable="true"
+            onDragStart={(e) => {
+                e.dataTransfer.setData('type', 'text');
+                e.dataTransfer.setData('payload', JSON.stringify({ 
+                    text: value, 
+                    fontSize: isLongText ? 12 : 16, 
+                    semantic: semantic,
+                    width: isLongText ? 300 : 200
+                }));
+            }}
+            onClick={handleAdd}
+            className="w-full p-2.5 bg-[#252627]/50 hover:bg-[#2F3031] border border-white/5 rounded-lg flex flex-col items-start gap-0.5 transition-all text-left group"
+        >
+            <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter group-hover:text-purple-400 transition-colors">{label}</span>
+            <span className="text-xs text-white font-medium line-clamp-1">{truncatedValue}</span>
+        </button>
     );
 }

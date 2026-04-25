@@ -30,12 +30,15 @@ export default function Authenticated({ user, header, children }) {
                                 <NavLink href={route('dashboard')} active={route().current('dashboard')}>
                                     My Resumes
                                 </NavLink>
-                                <NavLink href={route('user-details.index')} active={route().current('user-details.*')}>
-                                    Profile Builder
+                                <NavLink href={route('templates.index')} active={route().current('templates.*')}>
+                                    Marketplace
                                 </NavLink>
-                                {user.roles && user.roles.some(r => r.name === 'admin') && (
+                                <NavLink href={route('creator.dashboard')} active={route().current('creator.*')}>
+                                    Creator Studio
+                                </NavLink>
+                                {(user.roles?.includes('admin') || user.roles?.includes('super-admin')) && (
                                     <NavLink href={route('admin.dashboard')} active={route().current('admin.*')}>
-                                        Admin View
+                                        Admin Panel
                                     </NavLink>
                                 )}
                             </div>
@@ -112,6 +115,17 @@ export default function Authenticated({ user, header, children }) {
                         <ResponsiveNavLink href={route('user-details.index')} active={route().current('user-details.*')}>
                             Professional Details
                         </ResponsiveNavLink>
+                        <ResponsiveNavLink href={route('templates.index')} active={route().current('templates.*')}>
+                            Marketplace
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink href={route('creator.dashboard')} active={route().current('creator.*')}>
+                            Creator Studio
+                        </ResponsiveNavLink>
+                        {(user.roles?.includes('admin') || user.roles?.includes('super-admin')) && (
+                            <ResponsiveNavLink href={route('admin.dashboard')} active={route().current('admin.*')}>
+                                Admin Panel
+                            </ResponsiveNavLink>
+                        )}
                     </div>
 
                     <div className="pt-4 pb-1 border-t border-white/10">

@@ -5,6 +5,7 @@ use App\Http\Controllers\UserDetailsController;
 use App\Http\Controllers\ResumeController;
 use App\Http\Controllers\ResumeSyncController;
 use App\Http\Controllers\TemplateController;
+use App\Http\Controllers\TelemetryController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\TemplateController as AdminTemplateController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
@@ -13,6 +14,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+// Public Template Routes
+Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
+Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [ResumeController::class, 'index'])->name('dashboard');
@@ -67,23 +72,48 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('resumes/{resume}/sync', [ResumeSyncController::class, 'sync'])->name('resumes.sync');
     Route::post('resumes/{resume}/pull-latex', [ResumeSyncController::class, 'pullFromLatex'])->name('resumes.pull-latex');
 
-    // Templates Browsing
-    Route::get('/templates', [TemplateController::class, 'index'])->name('templates.index');
+    // Templates Publishing & Preview
+    Route::post('/templates/publish', [TemplateController::class, 'publish'])->name('templates.publish');
     Route::get('/templates/{template}/preview', [TemplateController::class, 'preview'])->name('templates.preview');
-    Route::get('/templates/{template}', [TemplateController::class, 'show'])->name('templates.show');
 
     // Admin Section
-    Route::middleware(['role:admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::middleware(['role:admin|super-admin'])->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/analytics', [\App\Http\Controllers\Admin\AnalyticsController::class, 'index'])->name('analytics.index');
+        
+        // Template Management & Moderation
+        Route::get('/moderation', [AdminTemplateController::class, 'moderationIndex'])->name('moderation.index');
+        Route::post('/templates/{template}/approve', [AdminTemplateController::class, 'approve'])->name('templates.approve');
+        Route::post('/templates/{template}/reject', [AdminTemplateController::class, 'reject'])->name('templates.reject');
+        Route::post('/templates/{template}/approve-deletion', [AdminTemplateController::class, 'approveDeletion'])->name('templates.approve_deletion');
         
         Route::resource('templates', AdminTemplateController::class);
         Route::post('templates/{template}/toggle-active', [AdminTemplateController::class, 'toggleActive'])->name('templates.toggle-active');
         
         Route::get('/users', [AdminUserController::class, 'index'])->name('users.index');
+        Route::post('/users', [AdminUserController::class, 'store'])->name('users.store');
         Route::get('/users/{user}', [AdminUserController::class, 'show'])->name('users.show');
         Route::post('/users/{user}/assign-role', [AdminUserController::class, 'assignRole'])->name('users.assign-role');
+        Route::post('/users/{user}/permissions', [AdminUserController::class, 'syncPermissions'])->name('users.sync-permissions');
         Route::delete('/users/{user}', [AdminUserController::class, 'destroy'])->name('users.destroy');
+
+        // Roles & Permissions Management
+        Route::get('/roles', [\App\Http\Controllers\Admin\RoleController::class, 'index'])->name('roles.index');
+        Route::post('/roles', [\App\Http\Controllers\Admin\RoleController::class, 'store'])->name('roles.store');
+        Route::post('/roles/{role}/permissions', [\App\Http\Controllers\Admin\RoleController::class, 'syncPermissions'])->name('roles.sync-permissions');
+        Route::delete('/roles/{role}', [\App\Http\Controllers\Admin\RoleController::class, 'destroy'])->name('roles.destroy');
     });
+
+    // Creator Studio
+    Route::prefix('creator')->name('creator.')->group(function () {
+        Route::get('/dashboard', [TemplateController::class, 'creatorDashboard'])->name('dashboard');
+        Route::get('/templates/create', [TemplateController::class, 'createForDeveloper'])->name('templates.create');
+        Route::get('/templates/{template}/edit', [TemplateController::class, 'editForDeveloper'])->name('templates.edit');
+        Route::post('/templates/{template}/request-deletion', [TemplateController::class, 'requestDeletion'])->name('templates.request_deletion');
+    });
+
+    // Telemetry Ingestion
+    Route::post('/telemetry', [TelemetryController::class, 'store'])->name('telemetry.store');
 
     // Default Laravel Profile Routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

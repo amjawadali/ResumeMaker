@@ -11,41 +11,49 @@ import EditorFooter from './EditorFooter';
 import TextEffectsPanel from './TextEffectsPanel';
 import ImageEditorPanel from './Panels/ImageEditorPanel';
 import ShapeEditorPanel from './Panels/ShapeEditorPanel';
+import PublishModal from './PublishModal';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 
-export default function KonvaEditor({ initialData, resume, userUploads }) {
-    const defaultPage = {
-        id: `page-${Date.now()}`,
-        title: '',
-        elements: initialData?.elements || [],
-        locked: false,
-        hidden: false
-    };
+// Hooks
+import { useEditorHistory } from '@/Hooks/Editor/useEditorHistory';
+import { useSelection } from '@/Hooks/Editor/useSelection';
+import { useEditorShortcuts } from '@/Hooks/Editor/useEditorShortcuts';
+import { useAutosave } from '@/Hooks/Editor/useAutosave';
+import { useTelemetry } from '@/Hooks/useTelemetry';
 
-    const [pages, setPages] = useState(initialData?.pages || [defaultPage]);
-    const [selectedIds, setSelectedIds] = useState([]);
+export default function KonvaEditor({ initialData, resume, userUploads, mode = 'resume', mockData = null, profile = null }) {
+    const stageRef = useRef();
+    const { fireEvent } = useTelemetry();
+
+    // Track editing session start
+    useEffect(() => {
+        fireEvent('edit_started', mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
+    }, []);
+    
+    // 1. History & Pages State
+    const { 
+        pages, setPages, setPagesSilent, 
+        undo, redo, canUndo, canRedo, 
+        historyStep, history, defaultPage
+    } = useEditorHistory(initialData?.pages);
+
+    // 2. Selection State
+    const { 
+        selectedIds, setSelectedIds, 
+        activeSelection, clearSelection 
+    } = useSelection(pages);
 
     // Track last effect change to prevent phantom deselections
     const lastEffectChangeRef = useRef(0);
 
     const handleSetSelectedIds = useCallback((ids) => {
         // If we're trying to deselect (ids=[]) shortly after applying an effect, ignore it.
-        // This fixes the issue where applying an effect triggers a false "click on stage".
         if (ids.length === 0 && (Date.now() - lastEffectChangeRef.current < 500)) {
             return;
         }
         setSelectedIds(ids);
-
-        // Auto-close effects panel if selection is cleared or not text
-        if (ids.length === 0) {
-            setShowEffects(false);
-        } else {
-            // Check if selected element is text (we need to find it in pages)
-            // We'll do this in a useEffect to access 'pages' cleanly or just verify it here if possible.
-            // Since accessing 'pages' inside useCallback might be stale if not in deps, let's use a useEffect watcher instead.
-        }
-    }, []);
+    }, [setSelectedIds]);
 
     // Watch selection to auto-close panels
     useEffect(() => {
@@ -53,24 +61,18 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             setShowEffects(false);
         } else {
             const activeEl = pages.flatMap(p => p.elements).find(e => e.id === selectedIds[0]);
-            // Keep panel open for all supported types
             const supportedTypes = ['text', 'image', 'rect', 'star', 'polygon', 'triangle', 'circle'];
             if (activeEl && !supportedTypes.includes(activeEl.type)) {
-                // optional: setShowEffects(false); 
-                // But let's leave it, maybe we add lines later.
-                // Actually, if we switch to an unsupported type, we should probably close it to avoid confusion.
                 setShowEffects(false);
             }
         }
     }, [selectedIds, pages]);
+
     const [activeTab, setActiveTab] = useState(null);
-    const [saving, setSaving] = useState(false);
     const [scale, setScale] = useState(1);
     const [title, setTitle] = useState(resume.title);
     const [clipboard, setClipboard] = useState(null);
     const [showEffects, setShowEffects] = useState(false);
-    const [history, setHistory] = useState([initialData?.pages || [defaultPage]]);
-    const [historyStep, setHistoryStep] = useState(0);
     const [uploads, setUploads] = useState(userUploads || []);
     const [versions, setVersions] = useState([]);
 
@@ -79,38 +81,43 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
     const [isUploading, setIsUploading] = useState(false);
     const [toolbarForceClose, setToolbarForceClose] = useState(0);
     const [showGrid, setShowGrid] = useState(false);
+    const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
-    const saveTimeoutRef = useRef(null);
-
-    const saveCanvas = useCallback(async (currentPages, currentTitle) => {
-        if (!currentPages || currentPages.length === 0) return;
-
-        setSaving(true);
+    const handlePublish = async (metadata) => {
         try {
-            // Capture snapshot for auto-save version
-            const snapshot = await captureSnapshot();
-
-            await axios.post(route('resumes.sync', resume.id), {
-                canvas_state: { pages: currentPages },
-                title: currentTitle,
-                snapshot: snapshot
+            // Capture high-quality preview for marketplace
+            const snapshot = await stageRef.current.getStage().toDataURL({ pixelRatio: 2 });
+            
+            await axios.post(route('templates.publish'), {
+                ...metadata,
+                canvas_data: { pages },
+                preview_image: snapshot,
+                resume_id: resume.id
             });
-            setSaving(false);
+            
+            fireEvent('template_published', 'Template', null, { title: metadata.title });
+            
+            toast.success('Submitted for moderation! You will be notified once it is approved.');
+            setIsPublishModalOpen(false);
         } catch (error) {
-            console.error('Sync failed:', error);
-            setSaving(false);
+            console.error('Publishing failed:', error);
+            toast.error(error.response?.data?.message || 'Failed to submit template.');
+            throw error;
         }
-    }, [resume.id]); // captureSnapshot is called directly, not needed in deps
+    };
 
-    useEffect(() => {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => {
-            saveCanvas(pages, title);
-        }, 1000);
-        return () => clearTimeout(saveTimeoutRef.current);
-    }, [pages, title, saveCanvas]);
-
-    const stageRef = useRef();
+    // 3. Autosave Synchronization
+    const { saving, triggerManualSave } = useAutosave({ pages, title }, {
+        delay: 2000,
+        onSave: async (data, signal) => {
+            const snapshot = await captureSnapshot();
+            await axios.post(route('resumes.sync', resume.id), {
+                canvas_state: { pages: data.pages },
+                title: data.title,
+                snapshot: snapshot
+            }, { signal });
+        }
+    });
 
     const exportToImage = useCallback(() => {
         if (!stageRef.current) return;
@@ -131,6 +138,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
 
             // Restore selection
             setSelectedIds(oldSelectedIds);
+
+            fireEvent('export_png', mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
         }, 100);
     }, [stageRef, selectedIds, title]);
 
@@ -138,40 +147,16 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         exportToImage();
     }, [exportToImage]);
 
-    const pushToHistory = useCallback((newPages) => {
-        const newHistory = history.slice(0, historyStep + 1);
-        newHistory.push(JSON.parse(JSON.stringify(newPages)));
-        setHistory(newHistory);
-        setHistoryStep(newHistory.length - 1);
-    }, [history, historyStep]);
 
-    const undo = useCallback(() => {
-        if (historyStep > 0) {
-            const prevStep = historyStep - 1;
-            setHistoryStep(prevStep);
-            setPages(history[prevStep]);
-        }
-    }, [history, historyStep]);
-
-    const redo = useCallback(() => {
-        if (historyStep < history.length - 1) {
-            const nextStep = historyStep + 1;
-            setHistoryStep(nextStep);
-            setPages(history[nextStep]);
-        }
-    }, [history, historyStep]);
-
-    const handleUpdateElement = useCallback((idOrIds, newAttrs) => {
+    const handleUpdateElement = useCallback((idOrIds, newAttrs, shouldCommit = true) => {
         const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
         setPages(prevPages => {
-            const newPages = prevPages.map(page => ({
+            return prevPages.map(page => ({
                 ...page,
                 elements: page.elements.map(el => ids.includes(el.id) ? { ...el, ...newAttrs } : el)
             }));
-            pushToHistory(newPages);
-            return newPages;
-        });
-    }, [pushToHistory]);
+        }, shouldCommit);
+    }, [setPages]);
 
     const handleAddElement = useCallback((type, props = {}, targetPageId = null) => {
         const id = `el-${Date.now()}`;
@@ -214,9 +199,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
 
         setPages(newPages);
-        pushToHistory(newPages);
         setSelectedIds([id]);
-    }, [pages, pushToHistory]);
+    }, [pages, setPages, setSelectedIds]);
 
     const handleUpload = useCallback(async (file, shouldAddToCanvas = false) => {
         const formData = new FormData();
@@ -360,7 +344,6 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             const response = await axios.post(route('resumes.versions.restore', versionId));
             const newPages = response.data.resume.canvas_state.pages || [defaultPage];
             setPages(newPages);
-            pushToHistory(newPages);
             setSelectedIds([]);
             toast.success('Version restored');
         } catch (error) {
@@ -369,7 +352,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         } finally {
             setSaving(false);
         }
-    }, [pushToHistory, defaultPage]);
+    }, [setPages, defaultPage, setSelectedIds]);
 
     const handleDeleteElement = useCallback(() => {
         if (selectedIds.length === 0) return;
@@ -378,9 +361,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             elements: page.elements.filter(el => !selectedIds.includes(el.id))
         }));
         setPages(newPages);
-        pushToHistory(newPages);
         setSelectedIds([]);
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages, setSelectedIds]);
 
     const handleDuplicateElement = useCallback(() => {
         if (selectedIds.length === 0) return;
@@ -406,24 +388,10 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         });
 
         setPages(newPages);
-        pushToHistory(newPages);
         setSelectedIds(newSelectedIds);
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages, setSelectedIds]);
 
     const [clipboardStyle, setClipboardStyle] = useState(null);
-
-    const handleNudge = useCallback((dx, dy) => {
-        if (selectedIds.length === 0) return;
-
-        setPages(prev => prev.map(page => ({
-            ...page,
-            elements: page.elements.map(el =>
-                (selectedIds.includes(el.id) && !el.locked)
-                    ? { ...el, x: el.x + dx, y: el.y + dy }
-                    : el
-            )
-        })));
-    }, [selectedIds]);
 
     const handleLayerAction = useCallback((action, payload) => {
         if (selectedIds.length === 0 && action !== 'reorder') return;
@@ -474,8 +442,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         });
 
         setPages(newPages);
-        pushToHistory(newPages);
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages]);
 
     const handleAlign = useCallback((alignment) => {
         if (selectedIds.length === 0) return;
@@ -505,8 +472,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }));
 
         setPages(newPages);
-        pushToHistory(newPages);
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages]);
 
     const handleLockToggle = useCallback(() => {
         if (selectedIds.length === 0) return;
@@ -517,8 +483,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             )
         }));
         setPages(newPages);
-        pushToHistory(newPages);
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages]);
 
     const handleCopyStyle = useCallback(() => {
         if (selectedIds.length !== 1) return;
@@ -543,8 +508,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             )
         }));
         setPages(newPages);
-        pushToHistory(newPages);
-    }, [selectedIds, pages, clipboardStyle, pushToHistory]);
+    }, [selectedIds, pages, clipboardStyle, setPages]);
 
     const handleCopy = useCallback(() => {
         if (selectedIds.length === 0) return;
@@ -625,7 +589,6 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             page.id === pageId ? { ...page, title: newTitle } : page
         );
         setPages(newPages);
-        // Don't push to history for every keystroke, but auto-save will catch it
     };
 
 
@@ -638,35 +601,14 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             const selectedInPage = page.elements.filter(el => selectedIds.includes(el.id));
             if (selectedInPage.length < 2) return page;
 
-            // Sort by Z-index (array order) to maintain layer order inside group
             selectedInPage.sort((a, b) => page.elements.indexOf(a) - page.elements.indexOf(b));
 
-            // Calculate bounding box
             let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
             selectedInPage.forEach(el => {
-                // Simplified BBox (rotation often makes this tricky, but for grouping we usually take the axis-aligned check of anchors)
-                // For a proper implementation, we'd take the selection rect from Konva transformer logic.
-                // Here we'll just use x,y and width/height.
-                // Assuming elements are not rotated for the sake of MVP group box creation,
-                // OR we accept that the group box might be slightly loose.
-                // Actually, if we just use x,y, it works fine for standard grouping.
-                // Child position relative to group: child.x - group.x
-
-                // Note: If child is rotated, its visual bbox is different.
-                // But conceptually, the group anchor is usually top-left of the union of centers/origins?
-                // Standard: Top-Left of the bounding rectangle of all shapes.
-
-                // Let's stick to simple min/max of position for now.
                 minX = Math.min(minX, el.x);
                 minY = Math.min(minY, el.y);
-                // We need max extent.
-                // Just using x/y is enough for "Origin".
-                // But Group Width/Height is needed for the Transformer to encompass it.
-                // So we do need width calculation.
                 const w = (el.width || 0) * (el.scaleX || 1);
                 const h = (el.height || 0) * (el.scaleY || 1);
-                // This ignores rotation of children contributing to bbox size.
-                // For MVP, this is acceptable.
                 maxX = Math.max(maxX, el.x + w);
                 maxY = Math.max(maxY, el.y + h);
             });
@@ -695,9 +637,6 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             };
 
             const remaining = page.elements.filter(el => !selectedIds.includes(el.id));
-            // Insert group at the position of the *last* selected element (top-most) or *first*?
-            // Usually top-most to avoid hiding behind others? Or bottom-most?
-            // Let's append to remaining for now (top).
             return {
                 ...page,
                 elements: [...remaining, groupElement]
@@ -707,9 +646,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         setPages(newPages);
         if (newGroupId) {
             setSelectedIds([newGroupId]);
-            pushToHistory(newPages);
         }
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages, setSelectedIds]);
 
     const handleUngroup = useCallback(() => {
         if (selectedIds.length !== 1) return;
@@ -724,24 +662,16 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
             const children = groupEl.elements.map(child => {
                 const childAbsX = groupEl.x + child.x;
                 const childAbsY = groupEl.y + child.y;
-                // Rotation/Scale composition is complex if Group is rotated/scaled.
-                // MVP: Assuming Group is NOT rotated/scaled yet (common for fresh groups).
-                // If Group IS rotated, we need to apply transform.
-                // For now, let's assume direct translation.
-                // TODO: Apply matrix transform if group has rotation/scale.
 
                 const newChild = {
                     ...child,
                     x: childAbsX,
                     y: childAbsY
-                    // rotation: child.rotation + groupEl.rotation, // Crude approximation
-                    // scaleX: child.scaleX * groupEl.scaleX...
                 };
                 ungroupedIds.push(newChild.id);
                 return newChild;
             });
 
-            // Replace group with children
             const idx = page.elements.indexOf(groupEl);
             const newElements = [...page.elements];
             newElements.splice(idx, 1, ...children);
@@ -752,73 +682,20 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         if (ungroupedIds.length > 0) {
             setPages(newPages);
             setSelectedIds(ungroupedIds);
-            pushToHistory(newPages);
         }
-    }, [selectedIds, pages, pushToHistory]);
+    }, [selectedIds, pages, setPages, setSelectedIds]);
 
-    // Keyboard Shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            // Ignore if input/textarea is focused (except for some like Ctrl+S maybe)
-            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
-
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                handleDeleteElement();
-            }
-
-            if (e.ctrlKey || e.metaKey) {
-                if (e.key === 'z') {
-                    e.preventDefault();
-                    undo();
-                }
-                if (e.key === 'y') {
-                    e.preventDefault();
-                    redo();
-                }
-                if (e.key === 'c') {
-                    // Handled by generic copy? Or explicit?
-                    // copy is checking selectedIds state.
-                    handleCopy();
-                }
-                if (e.key === 'v') {
-                    // Paste requires reading clipboard state... 
-                    // But 'clipboard' is state. Accessing it inside effect might be stale if dep array is empty.
-                    // So we must include handlers in dep array.
-                    handlePaste();
-                }
-                if (e.key === 'g') {
-                    e.preventDefault();
-                    if (e.shiftKey) {
-                        handleUngroup();
-                    } else {
-                        handleGroup();
-                    }
-                }
-                if (e.key === 'd') {
-                    e.preventDefault();
-                    handleDuplicateElement(); // Ctrl+D
-                }
-            }
-
-            // Nudge
-            if (selectedIds.length > 0) {
-                if (e.key === 'ArrowUp') { e.preventDefault(); handleNudge(0, -1); }
-                if (e.key === 'ArrowDown') { e.preventDefault(); handleNudge(0, 1); }
-                if (e.key === 'ArrowLeft') { e.preventDefault(); handleNudge(-1, 0); }
-                if (e.key === 'ArrowRight') { e.preventDefault(); handleNudge(1, 0); }
-
-                if (e.shiftKey) {
-                    if (e.key === 'ArrowUp') { e.preventDefault(); handleNudge(0, -10); }
-                    if (e.key === 'ArrowDown') { e.preventDefault(); handleNudge(0, 10); }
-                    if (e.key === 'ArrowLeft') { e.preventDefault(); handleNudge(-10, 0); }
-                    if (e.key === 'ArrowRight') { e.preventDefault(); handleNudge(10, 0); }
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleDeleteElement, undo, redo, handleCopy, handlePaste, handleGroup, handleUngroup, handleDuplicateElement, handleNudge, selectedIds]);
+    const handleNudge = useCallback((dx, dy) => {
+        if (selectedIds.length === 0) return;
+        setPages(pages.map(page => ({
+            ...page,
+            elements: page.elements.map(el =>
+                (selectedIds.includes(el.id) && !el.locked)
+                    ? { ...el, x: el.x + dx, y: el.y + dy }
+                    : el
+            )
+        })));
+    }, [selectedIds, pages, setPages]);
 
     const handlePageAction = useCallback(async (pageId, action) => {
         let newPages = [...pages];
@@ -905,8 +782,7 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         }
 
         setPages(newPages);
-        pushToHistory(newPages);
-    }, [pages, pushToHistory]);
+    }, [pages, setPages]);
 
     const handleCut = useCallback(() => {
         if (selectedIds.length === 0) return;
@@ -914,130 +790,37 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
         handleDeleteElement();
     }, [selectedIds, handleCopy, handleDeleteElement]);
 
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') return;
-
-            if (e.code === 'Space' && !e.repeat && !isSpacePressed) {
-                e.preventDefault();
-                setIsSpacePressed(true);
-                setIsHandMode(true);
-            }
-
-            if (e.key === 'Enter' && selectedIds.length === 1 && !e.shiftKey) {
-                const element = activeSelection;
-                if (element?.type === 'text') {
-                    // Trigger editing in CanvasStage via some mechanism
-                    // Since editingId is local to CanvasStage, we might need to lift it or use a ref
-                    // For now, let's look at how CanvasStage is used
-                    if (stageRef.current?.startEditing) {
-                        stageRef.current.startEditing(element.id);
-                    }
-                }
-            }
-
-            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
-
-            if (cmdOrCtrl) {
-                if (e.key === '=' || e.key === '+') {
-                    e.preventDefault();
-                    setScale(s => Math.min(3, s + 0.1));
-                    return;
-                }
-                if (e.key === '-' || e.key === '_') {
-                    e.preventDefault();
-                    setScale(s => Math.max(0.1, s - 0.1));
-                    return;
-                }
-                if (e.key === '0') {
-                    e.preventDefault();
-                    setScale(1);
-                    return;
-                }
-                if (e.key === 'z') {
-                    e.preventDefault();
-                    if (e.shiftKey) redo();
-                    else undo();
-                    return;
-                }
-                if (e.key === 'y') {
-                    e.preventDefault();
-                    redo();
-                    return;
-                }
-                if (e.key === 'c') {
-                    e.preventDefault();
-                    handleCopy();
-                }
-                if (e.key === 'x') {
-                    e.preventDefault();
-                    handleCut();
-                }
-                if (e.key === 'v') {
-                    e.preventDefault();
-                    handlePaste();
-                }
-                if (e.key === 'd') {
-                    e.preventDefault();
-                    handleDuplicateElement();
-                }
-            }
-
-            switch (e.key) {
-                case 'Delete':
-                case 'Backspace':
-                    handleDeleteElement();
-                    break;
-                case 'ArrowLeft':
-                    e.preventDefault();
-                    handleNudge(e.shiftKey ? -10 : -1, 0);
-                    break;
-                case 'ArrowRight':
-                    e.preventDefault();
-                    handleNudge(e.shiftKey ? 10 : 1, 0);
-                    break;
-                case 'ArrowUp':
-                    e.preventDefault();
-                    handleNudge(0, e.shiftKey ? -10 : -1);
-                    break;
-                case 'ArrowDown':
-                    e.preventDefault();
-                    handleNudge(0, e.shiftKey ? 10 : 1);
-                    break;
-            }
-        };
-
-        const handleKeyUp = (e) => {
-            if (e.code === 'Space') {
-                setIsSpacePressed(false);
-                setIsHandMode(false);
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-        return () => {
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
-        };
-    }, [handleDeleteElement, handleDuplicateElement, handleNudge, handleCopy, handlePaste, handleCut, undo, redo, isSpacePressed]);
-
     const handleDeleteResume = () => {
         if (confirm('Are you sure you want to delete this resume?')) {
             router.delete(route('resumes.destroy', resume.id));
         }
     };
 
-    const activeSelection = useMemo(() => {
-        if (selectedIds.length === 0) return null;
-        const lastId = selectedIds[selectedIds.length - 1];
-        for (const page of pages) {
-            const el = page.elements.find(e => e.id === lastId);
-            if (el) return el;
-        }
-        return null;
-    }, [selectedIds, pages]);
+    // 4. Keyboard Shortcuts
+    useEditorShortcuts({
+        undo,
+        redo,
+        copy: handleCopy,
+        paste: handlePaste,
+        cut: handleCut,
+        duplicate: handleDuplicateElement,
+        delete: handleDeleteElement,
+        group: handleGroup,
+        ungroup: handleUngroup,
+        nudge: handleNudge,
+        zoomIn: () => setScale(s => Math.min(3, s + 0.1)),
+        zoomOut: () => setScale(s => Math.max(0.1, s - 0.1)),
+        resetZoom: () => setScale(1),
+        save: triggerManualSave,
+        activeSelection,
+        startEditing: (id) => stageRef.current?.startEditing?.(id),
+        setHandMode: setIsHandMode
+    }, [
+        undo, redo, handleCopy, handlePaste, handleCut, 
+        handleDuplicateElement, handleDeleteElement, 
+        handleGroup, handleUngroup, handleNudge, 
+        triggerManualSave, activeSelection
+    ]);
 
     return (
         <div className={`flex flex-col h-screen w-screen bg-[#0E1318] text-white overflow-hidden select-none ${isHandMode ? 'cursor-grab active:cursor-grabbing' : ''}`}>
@@ -1055,6 +838,14 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                     setActiveTab('history');
                     fetchVersions();
                 }}
+                onPublish={() => setIsPublishModalOpen(true)}
+            />
+
+            <PublishModal
+                isOpen={isPublishModalOpen}
+                onClose={() => setIsPublishModalOpen(false)}
+                onPublish={handlePublish}
+                initialTitle={title}
             />
 
             {/* Fixed Context Toolbar */}
@@ -1140,15 +931,16 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                     <EditorResourcesDrawer
                         activeTab={activeTab}
                         onAddElement={handleAddElement}
-                        userUploads={uploads}
                         onUpload={handleUpload}
                         onDeleteUpload={handleDeleteUpload}
+                        userUploads={uploads}
                         isUploading={isUploading}
+                        onClose={() => setActiveTab(null)}
                         versions={versions}
                         onSaveVersion={handleSaveExplicitVersion}
                         onRestoreVersion={handleRestoreVersion}
                         onDeleteVersion={handleDeleteVersion}
-                        onClose={() => setActiveTab(null)}
+                        profile={profile}
                     />
                 )}
 
@@ -1176,6 +968,8 @@ export default function KonvaEditor({ initialData, resume, userUploads }) {
                         onCopy={handleCopy}
                         onCut={handleCut}
                         onPaste={handlePaste}
+                        mode={mode}
+                        mockData={mockData}
                     />
 
                     {/* Canva-style Footer */}

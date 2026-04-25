@@ -133,9 +133,42 @@ const getGradientProps = (element, width, height) => {
     };
 };
 
-const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing, shapeRef, isHandMode, scale, isSelected, isInGroup }) => {
+const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStartEditing, isEditing, shapeRef, isHandMode, scale, isSelected, isInGroup, mode, mockData }) => {
     const [isHovered, setIsHovered] = useState(false);
     let elementNode;
+
+    // --- DEVELOPER MODE MOCK DATA OVERRIDE ---
+    let displayProps = { ...shapeProps };
+    if (mode === 'developer' && mockData && shapeProps.semantic) {
+        const tag = shapeProps.semantic;
+        const { userDetail, experiences, educations, skills } = mockData;
+
+        // Simple Mapping
+        const simpleMap = {
+            'full_name': userDetail.full_name,
+            'email': userDetail.email,
+            'phone': userDetail.phone,
+            'location': userDetail.address,
+            'summary': userDetail.professional_summary,
+            'position': userDetail.job_title,
+            'linkedin': userDetail.linkedin,
+            'website': userDetail.website,
+        };
+
+        if (simpleMap[tag] && shapeProps.type === 'text') {
+            displayProps.text = simpleMap[tag];
+        } else if (tag === 'profile_photo' && shapeProps.type === 'image') {
+            displayProps.src = userDetail.profile_photo_url;
+        }
+        // Repeater fields (First item for preview)
+        else if (tag === 'experience_company') displayProps.text = experiences[0].company;
+        else if (tag === 'experience_title') displayProps.text = experiences[0].position;
+        else if (tag === 'experience_date') displayProps.text = `${experiences[0].start_date} - ${experiences[0].end_date}`;
+        else if (tag === 'education_school') displayProps.text = educations[0].school;
+        else if (tag === 'education_degree') displayProps.text = educations[0].degree;
+        else if (tag === 'skill_name') displayProps.text = skills[0].name;
+    }
+    // ------------------------------------------
 
     // Common props for all shapes
     const commonProps = {
@@ -148,7 +181,7 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
             onSelect(e, shapeProps.id);
         },
         ref: shapeRef,
-        ...shapeProps,
+        ...displayProps, // Use displayProps instead of shapeProps for visual rendering
         draggable: !isEditing && !isHandMode && !shapeProps.locked && !isInGroup, // Disable draggable if in group
         onMouseEnter: (e) => {
             if (!isEditing && !isHandMode && !shapeProps.locked && !isInGroup) {
@@ -252,6 +285,8 @@ const Element = ({ shapeProps, onSelect, onChange, onDragMove, onDragEnd, onStar
                         isHandMode={isHandMode}
                         scale={scale}
                         isSelected={false}
+                        mode={mode}
+                        mockData={mockData}
                     />
                 ))}
             </Group>
@@ -697,7 +732,7 @@ const KonvaImage = ({ commonProps, src }) => {
 
 import PageToolbar from './PageToolbar';
 
-const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction, showGrid, onPageAction, onUpdatePageTitle, clipboard, onCopy, onCut, onPaste }, ref) => {
+const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateElement, onAddElementAt, onUpload, scale = 1, onScaleChange, isHandMode, onDelete, onDuplicate, onAlign, onLayerAction, showGrid, onPageAction, onUpdatePageTitle, clipboard, onCopy, onCut, onPaste, mode, mockData }, ref) => {
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [guides, setGuides] = useState([]);
@@ -724,14 +759,15 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
         setEditingId(null);
     }, [selectedIds]);
 
-    useEffect(() => {
-        const updatePos = () => {
-            if (!stageRef.current) return;
-            setStagePos({ x: stageRef.current.x(), y: stageRef.current.y() });
-        };
-        const interval = setInterval(updatePos, 16);
-        return () => clearInterval(interval);
+    // Track stage position for toolbars (event-driven, no polling)
+    const syncStagePos = useCallback(() => {
+        if (!stageRef.current) return;
+        setStagePos({ x: stageRef.current.x(), y: stageRef.current.y() });
     }, []);
+
+    useEffect(() => {
+        syncStagePos();
+    }, [syncStagePos, scale]); // Also sync on scale changes
 
 
     useImperativeHandle(ref, () => ({
@@ -1178,11 +1214,7 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
         };
 
         calculatePosition();
-
-        // Update position on drag/transform
-        const interval = setInterval(calculatePosition, 16); // ~60fps
-        return () => clearInterval(interval);
-    }, [selectedIds, pages, scale, dimensions, editingId, stageRef]);
+    }, [selectedIds, pages, scale, dimensions, editingId, stageRef, stagePos]); // Dependencies include stagePos to move with it
 
     // Track mouse position for rulers
     const handleMouseMove = useCallback((e) => {
@@ -1252,7 +1284,12 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                         const clickedOnEmpty = e.target === e.target.getStage();
                         if (clickedOnEmpty) onSelect([]);
                     }}
-                    onWheel={handleWheel}
+                    onWheel={(e) => {
+                        handleWheel(e);
+                        syncStagePos();
+                    }}
+                    onDragMove={syncStagePos}
+                    onDragEnd={syncStagePos}
                     ref={stageRef}
                 >
                     <Layer>
@@ -1292,6 +1329,8 @@ const CanvasStage = forwardRef(({ pages = [], selectedIds, onSelect, onUpdateEle
                                                 isHandMode={isHandMode || page.locked || page.hidden}
                                                 scale={scale}
                                                 isSelected={selectedIds.includes(el.id)}
+                                                mode={mode}
+                                                mockData={mockData}
                                             />
                                         ))}
                                     </Group>

@@ -9,6 +9,7 @@ use App\Models\UserDetail;
 use App\Http\Requests\StoreResumeRequest;
 use App\Http\Requests\UpdateResumeRequest;
 use App\Services\LatexEngine\LatexConverter;
+use App\Services\SemanticFillService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
@@ -20,15 +21,24 @@ class ResumeController extends Controller
     use AuthorizesRequests;
 
     protected $latexConverter;
+    protected $semanticFillService;
 
-    public function __construct(LatexConverter $latexConverter)
+    public function __construct(LatexConverter $latexConverter, SemanticFillService $semanticFillService)
     {
         $this->latexConverter = $latexConverter;
+        $this->semanticFillService = $semanticFillService;
     }
     public function index()
     {
         $user = auth()->user()->loadCount(['resumes', 'educations', 'experiences', 'skills', 'certifications']);
-        $resumes = $user->resumes()->with('template')->latest()->get();
+        
+        $isAdmin = $user->hasAnyRole(['admin', 'super-admin']);
+        
+        if ($isAdmin) {
+            $resumes = Resume::with(['template', 'user'])->latest()->get();
+        } else {
+            $resumes = $user->resumes()->with('template')->latest()->get();
+        }
         
         // Calculate profile completion percentage
         $completion = 0;
@@ -40,7 +50,8 @@ class ResumeController extends Controller
 
         return \Inertia\Inertia::render('Dashboard', [
             'resumes' => $resumes,
-            'completion' => $completion
+            'completion' => $completion,
+            'isAdmin' => $isAdmin
         ]);
     }
 
@@ -91,6 +102,27 @@ class ResumeController extends Controller
         $validated['latex_source'] = $this->latexConverter->jsonToLatex(['elements' => []]);
 
         try {
+            // Find latest version if it's a community/canvas template
+            $template = Template::findOrFail($validated['template_id']);
+            if ($template->type !== 'blade') {
+                $latestVersion = $template->versions()->latest()->first();
+                $validated['template_version_id'] = $latestVersion ? $latestVersion->id : null;
+                $canvasData = ($latestVersion ? $latestVersion->canvas_data : $template->canvas_data) ?: ['pages' => []];
+
+                // MAGIC FILL: Replace placeholders with current user profile data
+                $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+                $profileData = [
+                    'userDetail' => $user->userDetail,
+                    'educations' => $user->educations,
+                    'experiences' => $user->experiences,
+                    'skills' => $user->skills,
+                    'certifications' => $user->certifications,
+                    'languages' => $user->languages
+                ];
+
+                $validated['canvas_state'] = $this->semanticFillService->fill($canvasData, $profileData);
+            }
+
             $resume = Resume::create($validated);
             \Illuminate\Support\Facades\Log::info('Resume created:', ['id' => $resume->id]);
             return redirect()->route('resumes.edit', $resume)->with('success', 'Resume created successfully! Now start designing.');
@@ -160,12 +192,7 @@ class ResumeController extends Controller
     {
         $this->authorize('update', $resume);
         
-        // Force Modern Professional for now as requested
-        if ($resume->template_id != 1) {
-            $resume->update(['template_id' => 1]);
-        }
-
-        $resume->load('template');
+        $resume->load(['template', 'templateVersion']);
         $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages', 'projects']);
 
         // Fetch user uploads from disk
@@ -181,13 +208,15 @@ class ResumeController extends Controller
         return \Inertia\Inertia::render('Resumes/Edit', [
             'resume' => $resume,
             'user' => $user,
-            'userDetail' => $user->userDetail ?? new UserDetail(),
-            'educations' => $user->educations,
-            'experiences' => $user->experiences,
-            'skills' => $user->skills,
-            'certifications' => $user->certifications,
-            'languages' => $user->languages,
-            'projects' => $user->projects,
+            'profile' => [
+                'userDetail' => $user->userDetail ?? new UserDetail(),
+                'educations' => $user->educations,
+                'experiences' => $user->experiences,
+                'skills' => $user->skills,
+                'certifications' => $user->certifications,
+                'languages' => $user->languages,
+                'projects' => $user->projects,
+            ],
             'userUploads' => $uploads
         ]);
     }

@@ -4,16 +4,66 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Template;
+use App\Services\ModerationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TemplateController extends Controller
 {
+    protected $moderation;
+
+    public function __construct(ModerationService $moderation)
+    {
+        $this->moderation = $moderation;
+    }
+
     public function index()
     {
-        $templates = Template::latest()->get();
+        $templates = Template::where('status', '!=', 'pending')->latest()->get();
         return \Inertia\Inertia::render('Admin/Templates/Index', compact('templates'));
+    }
+
+    public function moderationIndex()
+    {
+        $templates = Template::where('status', 'pending')
+            ->orWhere('is_deletion_requested', true)
+            ->latest()
+            ->get();
+        $user = auth()->user()->load(['userDetail', 'educations', 'experiences', 'skills', 'certifications', 'languages']);
+
+        return \Inertia\Inertia::render('Admin/Templates/Moderation', [
+            'templates' => $templates,
+            'adminProfile' => [
+                'userDetail' => $user->userDetail ?? new \App\Models\UserDetail(),
+                'educations' => $user->educations,
+                'experiences' => $user->experiences,
+                'skills' => $user->skills,
+                'certifications' => $user->certifications,
+                'languages' => $user->languages
+            ]
+        ]);
+    }
+
+    public function approve(Template $template)
+    {
+        $this->moderation->approve($template);
+        return back()->with('success', 'Template approved and published!');
+    }
+
+    public function reject(Template $template, Request $request)
+    {
+        $request->validate(['reason' => 'required|string']);
+        $this->moderation->reject($template, $request->reason);
+        return back()->with('success', 'Template rejected.');
+    }
+
+    public function approveDeletion(Template $template)
+    {
+        // Actually soft delete the template
+        $template->delete();
+        
+        return back()->with('success', 'Template systematically un-published/soft-deleted.');
     }
 
     public function create()

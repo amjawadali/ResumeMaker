@@ -24,6 +24,10 @@ class RolePermissionSeeder extends Seeder
             'download_resume',
             'manage_templates',
             'manage_users',
+            'manage_roles',
+            'manage_settings',
+            'moderate_content',
+            'view_audit_logs',
             'view_admin_dashboard',
         ];
 
@@ -45,5 +49,10 @@ class RolePermissionSeeder extends Seeder
 
         $adminRole = Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
         $adminRole->syncPermissions(Permission::where('guard_name', 'web')->get());
+
+        $superAdminRole = Role::firstOrCreate(['name' => 'super-admin', 'guard_name' => 'web']);
+        // Super admin doesn't strictly need permissions assigned if using Gate::before, 
+        // but it's good practice to sync them all anyway.
+        $superAdminRole->syncPermissions(Permission::where('guard_name', 'web')->get());
     }
 }

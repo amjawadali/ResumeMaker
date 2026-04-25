@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Sliders, Sun, Contrast, Droplet, Layers, Image as ImageIcon, Sparkles, Box, Gauge, Palette, RotateCw, FlipHorizontal, Eye, Scissors } from 'lucide-react';
+import SemanticTagDropdown from '../SemanticTagDropdown';
 import { removeBackground } from '@imgly/background-removal';
 
 const ImageEditorPanel = ({ selection, onClose, onUpdate }) => {
@@ -109,6 +110,15 @@ const ImageEditorPanel = ({ selection, onClose, onUpdate }) => {
                 <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors">
                     <X size={18} />
                 </button>
+            </div>
+
+            {/* Semantic Mapping */}
+            <div className="px-4 py-3 border-b border-slate-100">
+                <SemanticTagDropdown
+                    value={selection?.semantic}
+                    onChange={(tag) => onUpdate({ semantic: tag })}
+                    elementType="image"
+                />
             </div>
 
             {/* Tabs */}

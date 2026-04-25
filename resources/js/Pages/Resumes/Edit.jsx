@@ -7,13 +7,7 @@ import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 export default function Edit({
     resume,
     user,
-    userDetail,
-    educations,
-    experiences,
-    skills,
-    certifications,
-    languages,
-    projects,
+    profile,
     userUploads: initialUploads
 }) {
     const [resumeTitle, setResumeTitle] = useState(resume.title);
@@ -24,7 +18,15 @@ export default function Edit({
         if (resume.canvas_state && (resume.canvas_state.pages || resume.canvas_state.elements)) {
             setInitialData(resume.canvas_state);
         } else {
-            const template = createPremiumTemplate(userDetail, experiences, educations, skills, certifications, languages, projects);
+            const template = createPremiumTemplate(
+                profile.userDetail, 
+                profile.experiences, 
+                profile.educations, 
+                profile.skills, 
+                profile.certifications, 
+                profile.languages, 
+                profile.projects
+            );
             setInitialData(template);
         }
     }, []);
@@ -39,6 +41,7 @@ export default function Edit({
                 initialData={initialData}
                 resume={resume}
                 userUploads={initialUploads}
+                profile={profile}
             />
         </div>
     );

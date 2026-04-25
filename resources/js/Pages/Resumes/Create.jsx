@@ -5,6 +5,7 @@ import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import { CheckCircle, Wand2 } from 'lucide-react';
 import KonvaPreview from '@/Components/Editor/Canvas/KonvaPreview';
+import MagicPreview from '@/Components/Marketplace/MagicPreview';
 import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 import ScaleFit from '@/Components/ScaleFit';
 
@@ -14,9 +15,9 @@ export default function Create({ auth, templates, template_id, data: previewData
         template_id: template_id || (templates.length > 0 ? templates[0].id : ''),
     });
 
-    // Generate dynamic preview data once
+    // Generate dynamic preview data once for the default hardcoded template
     const previewDataValues = previewData || {};
-    const template = createPremiumTemplate(
+    const defaultTemplate = createPremiumTemplate(
         previewDataValues.userDetail,
         previewDataValues.experiences,
         previewDataValues.educations,
@@ -24,7 +25,7 @@ export default function Create({ auth, templates, template_id, data: previewData
         previewDataValues.certifications,
         previewDataValues.languages
     );
-    const defaultPages = template.pages;
+    const defaultPages = defaultTemplate.pages;
 
     const submit = (e) => {
         e.preventDefault();
@@ -81,23 +82,23 @@ export default function Create({ auth, templates, template_id, data: previewData
                                     className={`group cursor-pointer relative rounded-2xl bg-[#1e293b] overflow-hidden transition-all duration-500 ${data.template_id == template.id ? 'ring-2 ring-indigo-500 shadow-2xl shadow-indigo-500/20 scale-[1.01]' : 'ring-1 ring-white/10 hover:ring-white/20 hover:scale-[1.005]'}`}
                                 >
                                     {/* Preview Area Container */}
-                                    <div className="aspect-[1/1.414] bg-slate-900 relative overflow-hidden">
-                                        {/* ScaleFit Wrapper for A4 Template */}
-                                        <ScaleFit width={595} height={842} className="bg-white pointer-events-none select-none origin-top-left">
-                                            {/* Render Template Component Dynamically */}
-                                            {template.slug === 'modern' || true ? ( // Fallback to Premium for now
-                                                <KonvaPreview
-                                                    pages={defaultPages}
-                                                    scale={1}
-                                                    width={595}
-                                                    height={842}
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-400 font-black text-4xl">
-                                                    {template.name}
+                                    <div className="aspect-[1/1.414] bg-white relative overflow-hidden group-hover:scale-[1.02] transition-transform duration-700">
+                                        {template.type === 'blade' ? (
+                                            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 text-slate-400 p-8 text-center space-y-4">
+                                                <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-500 shadow-sm">
+                                                    <Wand2 size={32} />
                                                 </div>
-                                            )}
-                                        </ScaleFit>
+                                                <div className="space-y-1">
+                                                    <p className="font-black text-slate-800 text-lg">{template.name}</p>
+                                                    <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Blade Template</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <MagicPreview 
+                                                canvasData={template.canvas_data} 
+                                                profile={previewDataValues} 
+                                            />
+                                        )}
                                     </div>
 
                                     {/* Selection Overlay */}

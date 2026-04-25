@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Minus, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
+import SemanticTagDropdown from './SemanticTagDropdown';
 
 const EFFECT_STYLES = [
     { id: 'none', label: 'None' },
@@ -130,6 +131,15 @@ export default function TextEffectsPanel({ selection, onClose, onEffectChange })
                 <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
                     <X size={20} className="text-gray-500" />
                 </button>
+            </div>
+
+            {/* Semantic Mapping */}
+            <div className="px-4 pt-4 border-b border-gray-100 pb-4">
+                <SemanticTagDropdown
+                    value={selection?.semantic}
+                    onChange={(tag) => onEffectChange({ semantic: tag })}
+                    elementType="text"
+                />
             </div>
 
             {/* Tabs */}

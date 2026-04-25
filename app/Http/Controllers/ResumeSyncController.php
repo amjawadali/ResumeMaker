@@ -7,8 +7,11 @@ use App\Services\LatexEngine\LatexConverter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+
 class ResumeSyncController extends Controller
 {
+    use AuthorizesRequests;
     protected $latexConverter;
 
     public function __construct(LatexConverter $latexConverter)
@@ -21,10 +24,7 @@ class ResumeSyncController extends Controller
      */
     public function sync(Request $request, Resume $resume)
     {
-        // Authorization
-        if ($resume->user_id !== Auth::id()) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        $this->authorize('update', $resume);
 
         $validated = $request->validate([
             'canvas_state' => 'required|array',
@@ -57,41 +57,20 @@ class ResumeSyncController extends Controller
             ->first();
 
         if (!$lastVersion || $lastVersion->created_at->diffInMinutes(now()) >= 5) {
-            $snapshotPath = null;
-            if ($request->has('snapshot') && !empty($request->snapshot)) {
-                try {
-                    $imageData = $request->snapshot;
-                    if (strpos($imageData, ',') !== false) {
-                        $parts = explode(',', $imageData);
-                        $header = $parts[0];
-                        $data = $parts[1];
-                        
-                        $extension = 'png';
-                        if (preg_match('/image\/(\w+)/', $header, $matches)) {
-                            $extension = $matches[1];
-                        }
-                        
-                        $decodedData = base64_decode($data);
-                        if ($decodedData) {
-                            if (!\Illuminate\Support\Facades\Storage::disk('public')->exists('snapshots')) {
-                                \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('snapshots');
-                            }
-                            
-                            $filename = 'snapshots/' . \Illuminate\Support\Str::random(40) . '.' . $extension;
-                            \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $decodedData);
-                            $snapshotPath = $filename;
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Silently fail snapshot save for auto-save
-                }
-            }
-            
-            $resume->versions()->create([
+            $version = $resume->versions()->create([
                 'canvas_state' => $validated['canvas_state'],
                 'name' => 'Auto-save',
-                'snapshot_path' => $snapshotPath,
+                'snapshot_path' => null, // Processed in background
             ]);
+
+            if ($request->has('snapshot') && !empty($request->snapshot)) {
+                \App\Jobs\ProcessSnapshot::dispatch(
+                    $version, 
+                    $request->snapshot, 
+                    'snapshot_path', 
+                    'snapshots'
+                );
+            }
         }
 
         return response()->json([
@@ -107,9 +86,7 @@ class ResumeSyncController extends Controller
      */
     public function pullFromLatex(Resume $resume)
     {
-        if ($resume->user_id !== Auth::id()) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
+        $this->authorize('update', $resume);
 
         if (!$resume->latex_source) {
             return response()->json(['error' => 'No LaTeX source found'], 404);
