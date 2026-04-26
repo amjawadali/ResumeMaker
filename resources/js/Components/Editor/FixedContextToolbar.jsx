@@ -4,7 +4,7 @@ import {
     AlignLeft, AlignCenter, AlignRight, AlignJustify, List, ListOrdered,
     Palette, Type, PaintRoller, X, Lock, LockKeyhole, Layers, ArrowUp, ArrowDown,
     ArrowUpFromLine, ArrowDownToLine, AlignVerticalSpaceAround, AlignHorizontalSpaceAround,
-    Search, Check, GripVertical, Image as ImageIcon, Square
+    Search, Check, GripVertical, Image as ImageIcon, Square, Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TextEffectsPanel from './TextEffectsPanel';
@@ -19,7 +19,8 @@ const FONT_CATEGORIES = ['Handwriting', 'Corporate', 'Display', 'Headings', 'Par
 
 export default function FixedContextToolbar({
     selection, selectedIds, pages, onSelect, onStyleChange,
-    onAlign, onLayerAction, forceClose, showEffects, setShowEffects
+    onAlign, onLayerAction, forceClose, showEffects, setShowEffects,
+    onDistribute
 }) {
     const elements = pages.flatMap(p => p.elements);
     const [activePanel, setActivePanel] = useState(null); // 'position' | 'font' | null
@@ -165,6 +166,42 @@ export default function FixedContextToolbar({
                                 icon={<Strikethrough size={16} />}
                                 active={selection.textDecoration === 'line-through'}
                                 onClick={() => handleStyleChange('textDecoration', selection.textDecoration === 'line-through' ? 'none' : 'line-through')}
+                            />
+
+                            <div className="w-px h-5 bg-gray-300 mx-1" />
+
+                            {/* Text Stroke Color */}
+                            <div className="relative group">
+                                <button className="flex items-center justify-center w-8 h-8 hover:bg-gray-100 rounded border border-transparent hover:border-gray-200">
+                                    <span className="text-base font-black" style={{ WebkitTextStroke: '1px ' + (selection.stroke || '#000000'), color: 'transparent' }}>A</span>
+                                </button>
+                                <input
+                                    type="color"
+                                    value={selection.stroke || '#000000'}
+                                    onChange={(e) => handleStyleChange('stroke', e.target.value)}
+                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                />
+                            </div>
+
+                            {/* Text Stroke Width */}
+                            <div className="relative group">
+                                <button
+                                    onClick={() => handleStyleChange('strokeWidth', (selection.strokeWidth || 0) > 0 ? 0 : 1)}
+                                    className={`flex items-center justify-center w-8 h-8 rounded border transition-colors ${(selection.strokeWidth || 0) > 0 ? 'bg-purple-50 border-purple-300 text-purple-700' : 'hover:bg-gray-100 border-transparent hover:border-gray-200 text-gray-700'}`}
+                                    title="Toggle stroke"
+                                >
+                                    <span className="text-xs font-bold">{(selection.strokeWidth || 0)}</span>
+                                </button>
+                            </div>
+
+                            <div className="w-px h-5 bg-gray-300 mx-1" />
+
+                            {/* Auto Width Toggle */}
+                            <ToolbarButton
+                                icon={<span className="text-xs font-bold">Auto</span>}
+                                active={selection.autoWidth === true}
+                                onClick={() => handleStyleChange('autoWidth', selection.autoWidth ? false : true)}
+                                tooltip="Auto width"
                             />
 
                             {/* Text Case AA */}
@@ -329,6 +366,41 @@ export default function FixedContextToolbar({
                     <button className="p-1.5 text-gray-700 hover:bg-gray-100 rounded">
                         <PaintRoller size={16} />
                     </button>
+
+                    <div className="w-px h-5 bg-gray-300 mx-1" />
+
+                    {/* Link Button */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setActivePanel(activePanel === 'link' ? null : 'link')}
+                            className={`p-1.5 rounded ${selection?.link ? 'text-purple-600 bg-purple-50' : 'text-gray-700 hover:bg-gray-100'}`}
+                            title={selection?.link || 'Add link'}
+                        >
+                            <Link2 size={16} />
+                        </button>
+                        {activePanel === 'link' && (
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 p-3 w-64 z-50">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={selection?.link || ''}
+                                        onChange={(e) => handleStyleChange('link', e.target.value)}
+                                        placeholder="https://..."
+                                        className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:ring-1 focus:ring-purple-500 outline-none"
+                                        autoFocus
+                                    />
+                                    {selection?.link && (
+                                        <button
+                                            onClick={() => handleStyleChange('link', '')}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-400"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -353,6 +425,7 @@ export default function FixedContextToolbar({
                                 elements={elements}
                                 onSelect={onSelect}
                                 handleDimensionChange={handleDimensionChange}
+                                onDistribute={onDistribute}
                             />
                         ) : activePanel === 'font' ? (
                             <FontPanelContent
@@ -467,7 +540,7 @@ function FontItem({ font, selected, onClick }) {
     )
 }
 
-function PositionPanelContent({ onClose, onAlign, onLayerAction, selection, selectedIds, elements, onSelect, handleDimensionChange }) {
+function PositionPanelContent({ onClose, onAlign, onLayerAction, selection, selectedIds, elements, onSelect, handleDimensionChange, onDistribute }) {
     const [activeTab, setActiveTab] = useState('arrange'); // 'arrange' | 'layers'
     const [layerFilter, setLayerFilter] = useState('all'); // 'all' | 'overlapping'
     const [draggedId, setDraggedId] = useState(null);
@@ -475,7 +548,7 @@ function PositionPanelContent({ onClose, onAlign, onLayerAction, selection, sele
     const handleDragStart = (e, id) => {
         setDraggedId(id);
         e.dataTransfer.effectAllowed = 'move';
-        // Create an invisible ghost image to avoid standard drag behavior if needed, 
+        // Create an invisible ghost image to avoid standard drag behavior if needed,
         // but default is fine for a list.
     };
 
@@ -500,8 +573,8 @@ function PositionPanelContent({ onClose, onAlign, onLayerAction, selection, sele
     // Filter elements (reverse for top-down display)
     const reversedElements = [...elements].reverse();
 
-    // Simple overlapping logic: elements that share any X/Y space? 
-    // Or just all for now to keep it responsive. 
+    // Simple overlapping logic: elements that share any X/Y space?
+    // Or just all for now to keep it responsive.
     // Canva's 'overlapping' usually shows elements near the selection.
     const filteredElements = layerFilter === 'overlapping' && selection
         ? reversedElements.filter(el => {
@@ -583,6 +656,25 @@ function PositionPanelContent({ onClose, onAlign, onLayerAction, selection, sele
                                 <PositionActionButton icon={<ArrowRightToLine size={16} />} label="Right" onClick={() => onAlign('right')} />
                             </div>
                         </div>
+
+                        {/* Distribute */}
+                        {selectedIds.length >= 3 && (
+                            <div>
+                                <h4 className="text-xs font-bold text-gray-900 mb-3">Distribute</h4>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <PositionActionButton
+                                        icon={<DistributeHorizontally size={16} />}
+                                        label="Horizontally"
+                                        onClick={() => onDistribute('horizontal')}
+                                    />
+                                    <PositionActionButton
+                                        icon={<DistributeVertically size={16} />}
+                                        label="Vertically"
+                                        onClick={() => onDistribute('vertical')}
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Advanced Dimensions */}
                         <div>
@@ -774,4 +866,10 @@ const ArrowLeftToLine = ({ size }) => (
 );
 const ArrowRightToLine = ({ size }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 4v16" /><path d="M3 12h15" /><path d="m14 8 4 4-4 4" /></svg>
+);
+const DistributeHorizontally = ({ size }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3v18" /><path d="M22 3v18" /><path d="M5 8h14" /><path d="M5 12h14" /><path d="M5 16h14" /></svg>
+);
+const DistributeVertically = ({ size }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2h18" /><path d="M3 22h18" /><path d="M8 5v14" /><path d="M12 5v14" /><path d="M16 5v14" /></svg>
 );

@@ -24,6 +24,61 @@ export default class RepeaterEngine {
     }
 
     /**
+     * Check if a semantic tag has corresponding profile data.
+     * Used for conditional visibility of individual elements.
+     */
+    hasDataForSemantic(semantic) {
+        if (!semantic) return true;
+        const { userDetail, experiences, educations, skills, certifications, languages } = this.profileData;
+
+        const tagMap = {
+            'full_name': () => !!userDetail?.full_name,
+            'email': () => !!userDetail?.email,
+            'phone': () => !!userDetail?.phone,
+            'location': () => !!(userDetail?.address || userDetail?.location),
+            'summary': () => !!(userDetail?.professional_summary || userDetail?.summary),
+            'position': () => !!(userDetail?.job_title || userDetail?.position || (experiences?.length > 0)),
+            'linkedin': () => !!userDetail?.linkedin,
+            'website': () => !!userDetail?.website,
+            'profile_photo': () => !!userDetail?.profile_photo_url,
+            'skill_name': () => skills?.length > 0,
+            'experience_repeater': () => experiences?.length > 0,
+            'experience_company': () => experiences?.length > 0,
+            'experience_title': () => experiences?.length > 0,
+            'experience_date': () => experiences?.length > 0,
+            'education_repeater': () => educations?.length > 0,
+            'education_school': () => educations?.length > 0,
+            'education_degree': () => educations?.length > 0,
+            'education_date': () => educations?.length > 0,
+        };
+
+        return (tagMap[semantic] ? tagMap[semantic]() : true);
+    }
+
+    /**
+     * Apply smart truncation to text elements that exceed their defined bounds.
+     */
+    applySmartTruncation(element) {
+        if (element.type !== 'text' || !element.width || !element.text) return element;
+
+        const text = element.text;
+        const maxWidth = element.width;
+        const fontSize = element.fontSize || 12;
+        const charWidth = fontSize * 0.55; // approximate average char width
+        const maxChars = Math.floor(maxWidth / charWidth);
+
+        if (text.length > maxChars) {
+            return {
+                ...element,
+                text: text.substring(0, maxChars - 3) + '...',
+                _truncated: true,
+                _originalText: text
+            };
+        }
+        return element;
+    }
+
+    /**
      * Process a single page.
      */
     processPage(page) {
@@ -34,6 +89,13 @@ export default class RepeaterEngine {
         const sortedElements = [...page.elements].sort((a, b) => a.y - b.y);
 
         for (const element of sortedElements) {
+            // Conditional visibility: skip elements whose semantic data is absent
+            if (element.semantic && !element.semantic.endsWith('_repeater') && !element.semantic.endsWith('_heading')) {
+                if (!this.hasDataForSemantic(element.semantic)) {
+                    continue;
+                }
+            }
+
             // Check if this is a heading for a section that might be empty
             if (element.semantic && element.semantic.endsWith('_heading')) {
                 const type = element.semantic.split('_')[0];
@@ -49,7 +111,9 @@ export default class RepeaterEngine {
                 newElements.push(...clones);
                 currentYShift += shift;
             } else {
-                newElements.push(element);
+                // Apply smart truncation for text elements with overflow potential
+                const processed = this.applySmartTruncation(element);
+                newElements.push(processed);
             }
         }
 
@@ -75,10 +139,10 @@ export default class RepeaterEngine {
             const clone = JSON.parse(JSON.stringify(repeaterElement));
             clone.id = `${repeaterElement.id}-clone-${index}`;
             clone.y = repeaterElement.y + (index * (repeaterElement.height + spacing));
-            
+
             // Map data into the clone
             this.mapItemData(clone, item, type);
-            
+
             clones.push(clone);
             if (index > 0) {
                 totalShift += repeaterElement.height + spacing;
@@ -120,12 +184,19 @@ export default class RepeaterEngine {
                 'education_degree': item.degree || item.qualification,
                 'education_date': `${item.start_date} - ${item.end_date || 'Present'}`,
                 'education_description': item.description
+            },
+            'certification': {
+                'certification_name': item.name || item.title,
+                'certification_issuer': item.issuer || item.organization,
+                'certification_date': item.date || item.issue_date
             }
         };
 
         const value = mapping[context]?.[child.semantic];
         if (value) {
             child.text = value;
+            // Apply smart truncation after filling data
+            this.applySmartTruncation(child);
         }
     }
 }

@@ -47,12 +47,26 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/language/{language}', [UserDetailsController::class, 'updateLanguage'])->name('language.update');
         Route::delete('/language/{language}', [UserDetailsController::class, 'deleteLanguage'])->name('language.destroy');
 
+        Route::post('/project', [UserDetailsController::class, 'storeProject'])->name('project.store');
+        Route::put('/project/{project}', [UserDetailsController::class, 'updateProject'])->name('project.update');
+        Route::delete('/project/{project}', [UserDetailsController::class, 'deleteProject'])->name('project.destroy');
+
+        Route::post('/award', [UserDetailsController::class, 'storeAward'])->name('award.store');
+        Route::put('/award/{award}', [UserDetailsController::class, 'updateAward'])->name('award.update');
+        Route::delete('/award/{award}', [UserDetailsController::class, 'deleteAward'])->name('award.destroy');
+
+        Route::post('/volunteer-work', [UserDetailsController::class, 'storeVolunteerWork'])->name('volunteer-work.store');
+        Route::put('/volunteer-work/{volunteerWork}', [UserDetailsController::class, 'updateVolunteerWork'])->name('volunteer-work.update');
+        Route::delete('/volunteer-work/{volunteerWork}', [UserDetailsController::class, 'deleteVolunteerWork'])->name('volunteer-work.destroy');
+
+        Route::post('/publication', [UserDetailsController::class, 'storePublication'])->name('publication.store');
+        Route::put('/publication/{publication}', [UserDetailsController::class, 'updatePublication'])->name('publication.update');
+        Route::delete('/publication/{publication}', [UserDetailsController::class, 'deletePublication'])->name('publication.destroy');
+
         Route::post('/upload-image', [UserDetailsController::class, 'uploadImage'])->name('upload-image');
         Route::delete('/delete-image', [UserDetailsController::class, 'deleteImage'])->name('delete-image');
         
-        // AI Profile Extraction
-        Route::post('/extract-from-document', [UserDetailsController::class, 'extractFromDocument'])->name('extract-from-document');
-        Route::post('/save-extracted-data', [UserDetailsController::class, 'saveExtractedData'])->name('save-extracted-data');
+
     });
 
     Route::resource('resumes', ResumeController::class);

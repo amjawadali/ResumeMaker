@@ -274,6 +274,58 @@ const ImageEditorPanel = ({ selection, onClose, onUpdate }) => {
                 {activeTab === 'transform' && (
                     <div className="space-y-6">
                         <div className="space-y-4">
+                            <h3 className="font-bold text-sm text-slate-700">Crop Aspect Ratio</h3>
+                            <div className="grid grid-cols-4 gap-2">
+                                {[
+                                    { label: 'Free', w: null, h: null },
+                                    { label: '1:1', w: 1, h: 1 },
+                                    { label: '4:3', w: 4, h: 3 },
+                                    { label: '16:9', w: 16, h: 9 },
+                                    { label: '2:3', w: 2, h: 3 },
+                                    { label: '3:4', w: 3, h: 4 },
+                                    { label: '9:16', w: 9, h: 16 },
+                                    { label: 'Circle', w: 1, h: 1, circle: true },
+                                ].map(preset => {
+                                    const isActive = preset.w === null
+                                        ? (!selection.cropWidth && !selection.cropHeight)
+                                        : (Math.abs((selection.cropWidth || 0) / (selection.cropHeight || 1) - preset.w / preset.h) < 0.1);
+                                    return (
+                                        <button
+                                            key={preset.label}
+                                            onClick={() => {
+                                                if (preset.w === null) {
+                                                    onUpdate({ cropX: 0, cropY: 0, cropWidth: null, cropHeight: null, cropCircle: false });
+                                                } else {
+                                                    const imgW = selection.width || 200;
+                                                    const imgH = selection.height || 200;
+                                                    const ratio = preset.w / preset.h;
+                                                    let cw, ch;
+                                                    if (imgW / imgH > ratio) {
+                                                        ch = imgH;
+                                                        cw = imgH * ratio;
+                                                    } else {
+                                                        cw = imgW;
+                                                        ch = imgW / ratio;
+                                                    }
+                                                    onUpdate({
+                                                        cropX: (imgW - cw) / 2,
+                                                        cropY: (imgH - ch) / 2,
+                                                        cropWidth: cw,
+                                                        cropHeight: ch,
+                                                        cropCircle: !!preset.circle,
+                                                    });
+                                                }
+                                            }}
+                                            className={`flex items-center justify-center p-2 rounded-lg border text-xs font-bold transition-colors ${isActive ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                                        >
+                                            {preset.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
                             <h3 className="font-bold text-sm text-slate-700">Flip & Rotate</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 <button

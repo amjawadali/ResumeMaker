@@ -9,7 +9,10 @@ import CanvasStage from './Canvas/CanvasStage';
 import EditorResourcesDrawer from './EditorResourcesDrawer';
 import EditorFooter from './EditorFooter';
 import TextEffectsPanel from './TextEffectsPanel';
-import ImageEditorPanel from './Panels/ImageEditorPanel';
+import ScaleFit from '@/Components/ScaleFit';
+import ImageEditorPanel from '@/Components/Editor/Panels/ImageEditorPanel';
+import SectionVisibilityToggle from '@/Components/Editor/Panels/SectionVisibilityToggle';
+import TemplateValidationSidebar from '@/Components/Editor/Panels/TemplateValidationSidebar';
 import ShapeEditorPanel from './Panels/ShapeEditorPanel';
 import PublishModal from './PublishModal';
 import { router } from '@inertiajs/react';
@@ -30,18 +33,18 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
     useEffect(() => {
         fireEvent('edit_started', mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
     }, []);
-    
+
     // 1. History & Pages State
-    const { 
-        pages, setPages, setPagesSilent, 
-        undo, redo, canUndo, canRedo, 
+    const {
+        pages, setPages, setPagesSilent,
+        undo, redo, canUndo, canRedo,
         historyStep, history, defaultPage
     } = useEditorHistory(initialData?.pages);
 
     // 2. Selection State
-    const { 
-        selectedIds, setSelectedIds, 
-        activeSelection, clearSelection 
+    const {
+        selectedIds, setSelectedIds,
+        activeSelection, clearSelection
     } = useSelection(pages);
 
     // Track last effect change to prevent phantom deselections
@@ -82,21 +85,35 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
     const [toolbarForceClose, setToolbarForceClose] = useState(0);
     const [showGrid, setShowGrid] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
+    const [sectionVisibility, setSectionVisibility] = useState({
+        header: true, summary: true, experience: true, education: true,
+        skills: true, certifications: true, languages: true
+    });
+
+    const [canvasWidth, setCanvasWidth] = useState(initialData?.canvasWidth || 595);
+    const [canvasHeight, setCanvasHeight] = useState(initialData?.canvasHeight || 842);
+
+    const handleToggleSection = useCallback((sectionKey) => {
+        setSectionVisibility(prev => ({
+            ...prev,
+            [sectionKey]: !prev[sectionKey]
+        }));
+    }, []);
 
     const handlePublish = async (metadata) => {
         try {
             // Capture high-quality preview for marketplace
             const snapshot = await stageRef.current.getStage().toDataURL({ pixelRatio: 2 });
-            
+
             await axios.post(route('templates.publish'), {
                 ...metadata,
                 canvas_data: { pages },
                 preview_image: snapshot,
                 resume_id: resume.id
             });
-            
+
             fireEvent('template_published', 'Template', null, { title: metadata.title });
-            
+
             toast.success('Submitted for moderation! You will be notified once it is approved.');
             setIsPublishModalOpen(false);
         } catch (error) {
@@ -119,7 +136,14 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         }
     });
 
-    const exportToImage = useCallback(() => {
+    const handleExport = useCallback((format = 'png') => {
+        if (format === 'pdf') {
+            // Use backend PDF generation route
+            window.open(route('resumes.download-pdf', resume.id), '_blank');
+            fireEvent('export_pdf', mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
+            return;
+        }
+
         if (!stageRef.current) return;
 
         // Hide selection before export
@@ -128,9 +152,15 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
 
         // Brief timeout to ensure UI updates before capture
         setTimeout(() => {
-            const dataURL = stageRef.current.toDataURL({ pixelRatio: 3 }); // High quality 3x resolution
+            const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
+            const ext = format === 'jpg' ? 'jpg' : 'png';
+            const dataURL = stageRef.current.toDataURL({
+                mimeType,
+                pixelRatio: 3, // High quality 3x resolution
+                quality: format === 'jpg' ? 0.9 : undefined,
+            });
             const link = document.createElement('a');
-            link.download = `${title || 'resume'}.png`;
+            link.download = `${title || 'resume'}.${ext}`;
             link.href = dataURL;
             document.body.appendChild(link);
             link.click();
@@ -139,21 +169,27 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
             // Restore selection
             setSelectedIds(oldSelectedIds);
 
-            fireEvent('export_png', mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
+            fireEvent(`export_${format}`, mode === 'developer' ? 'Template' : 'Resume', mode === 'developer' ? initialData?.id : resume.id);
         }, 100);
-    }, [stageRef, selectedIds, title]);
+    }, [stageRef, selectedIds, title, resume?.id, mode, initialData?.id]);
 
-    const handleExport = useCallback(() => {
-        exportToImage();
-    }, [exportToImage]);
 
+    const updateElementsRecursive = (elements, ids, newAttrs) => {
+        return elements.map(el => {
+            if (ids.includes(el.id)) return { ...el, ...newAttrs };
+            if (el.type === 'group' && el.elements) {
+                return { ...el, elements: updateElementsRecursive(el.elements, ids, newAttrs) };
+            }
+            return el;
+        });
+    };
 
     const handleUpdateElement = useCallback((idOrIds, newAttrs, shouldCommit = true) => {
         const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
         setPages(prevPages => {
             return prevPages.map(page => ({
                 ...page,
-                elements: page.elements.map(el => ids.includes(el.id) ? { ...el, ...newAttrs } : el)
+                elements: updateElementsRecursive(page.elements, ids, newAttrs)
             }));
         }, shouldCommit);
     }, [setPages]);
@@ -163,11 +199,13 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         const newElement = {
             id,
             type,
-            x: 50,
-            y: 50,
+            x: props.x ?? 150,
+            y: props.y ?? 150,
             width: 100,
             height: 100,
-            fill: type === 'image' ? null : '#000000',
+            fill: type === 'image' || type === 'line' || type === 'arrow' ? null : '#000000',
+            stroke: type === 'line' || type === 'arrow' ? '#000000' : undefined,
+            strokeWidth: type === 'line' || type === 'arrow' ? 3 : undefined,
             text: type === 'text' ? 'Double click to edit' : '',
             fontSize: 20,
             // Frame-specific defaults
@@ -521,58 +559,61 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         setClipboard(selectedElements);
     }, [selectedIds, pages]);
 
-    const handlePaste = useCallback(() => {
+    const handlePaste = useCallback((cursorPos = null) => {
         if (!clipboard || clipboard.length === 0) return;
 
         const newPages = [...pages];
         const newSelectedIds = [];
 
-        // Paste into the last page for now (or active page if tracked)
         if (newPages.length === 0) return;
 
-        // Determine target page: either the one with selection or the last one
+        // Get pointer position from stage if available and no explicit cursorPos given
+        let effectiveCursorPos = cursorPos;
+        if (!effectiveCursorPos && stageRef.current?.getPointerPosition) {
+            effectiveCursorPos = stageRef.current.getPointerPosition();
+        }
+
+        // Determine target page
         let targetPageIndex = newPages.length - 1;
-        if (selectedIds.length > 0) {
+        if (effectiveCursorPos) {
+            // Find page under cursor
+            const pageIdx = Math.floor(effectiveCursorPos.y / 842); // rough page height
+            if (pageIdx >= 0 && pageIdx < newPages.length) targetPageIndex = pageIdx;
+        } else if (selectedIds.length > 0) {
             const idx = newPages.findIndex(p => p.elements.some(el => selectedIds.includes(el.id)));
             if (idx !== -1) targetPageIndex = idx;
         }
         const targetPage = newPages[targetPageIndex];
 
-        const pasteOffset = 20;
+        // If cursor position provided, paste centered at cursor; otherwise offset by 20px
+        const hasCursor = effectiveCursorPos && effectiveCursorPos.x !== undefined && effectiveCursorPos.y !== undefined;
+        const pasteOffsetX = hasCursor ? effectiveCursorPos.x : 20;
+        const pasteOffsetY = hasCursor ? effectiveCursorPos.y : 20;
+        const useAbsolute = hasCursor;
 
-        const pasteRecursive = (elements) => elements.map(item => {
-            const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-            const newItem = {
-                ...item,
-                id: newId,
-                x: item.x + pasteOffset,
-                y: item.y + pasteOffset
-            };
-            if (newItem.type === 'group' && newItem.elements) {
-                newItem.elements = pasteRecursive(newItem.elements);
+        const cloneWithNewIds = (el) => {
+            const elId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const newEl = { ...el, id: elId };
+            if (newEl.type === 'group' && newEl.elements) {
+                newEl.elements = newEl.elements.map(child => cloneWithNewIds(child));
             }
-            // Top level items get tracked for selection
-            if (elements === clipboard) newSelectedIds.push(newId);
-            return newItem;
-        });
+            return newEl;
+        };
 
-        // This logic is slightly broken because map returns array, but we need to track IDs only for top level.
-        // Let's refactor simple loop for top level.
         const pastedElements = clipboard.map(item => {
             const newId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
             newSelectedIds.push(newId);
 
-            const cloneWithNewIds = (el) => {
-                const elId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                const newEl = { ...el, id: elId };
-                if (newEl.type === 'group' && newEl.elements) {
-                    newEl.elements = newEl.elements.map(child => cloneWithNewIds(child));
-                }
-                return newEl;
+            let newItem;
+            if (useAbsolute) {
+                // Center at cursor: subtract half of item's width/height
+                const offsetX = pasteOffsetX - (item.width || 100) / 2;
+                const offsetY = pasteOffsetY - (item.height || 100) / 2;
+                newItem = { ...item, id: newId, x: offsetX, y: offsetY };
+            } else {
+                newItem = { ...item, id: newId, x: item.x + pasteOffsetX, y: item.y + pasteOffsetY };
             }
 
-            // Clone children if group
-            let newItem = { ...item, id: newId, x: item.x + pasteOffset, y: item.y + pasteOffset };
             if (newItem.type === 'group' && newItem.elements) {
                 newItem.elements = newItem.elements.map(child => cloneWithNewIds(child));
             }
@@ -685,17 +726,34 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         }
     }, [selectedIds, pages, setPages, setSelectedIds]);
 
+    const nudgeElementsRecursive = (elements, ids, dx, dy) => {
+        return elements.map(el => {
+            if (ids.includes(el.id) && !el.locked) return { ...el, x: el.x + dx, y: el.y + dy };
+            if (el.type === 'group' && el.elements) {
+                return { ...el, elements: nudgeElementsRecursive(el.elements, ids, dx, dy) };
+            }
+            return el;
+        });
+    };
+
     const handleNudge = useCallback((dx, dy) => {
         if (selectedIds.length === 0) return;
         setPages(pages.map(page => ({
             ...page,
-            elements: page.elements.map(el =>
-                (selectedIds.includes(el.id) && !el.locked)
-                    ? { ...el, x: el.x + dx, y: el.y + dy }
-                    : el
-            )
+            elements: nudgeElementsRecursive(page.elements, selectedIds, dx, dy)
         })));
     }, [selectedIds, pages, setPages]);
+
+    const handleSelectAll = useCallback(() => {
+        const visiblePage = pages.find(p => !p.hidden && !p.locked);
+        if (visiblePage) {
+            setSelectedIds(visiblePage.elements.map(el => el.id));
+        }
+    }, [pages, setSelectedIds]);
+
+    const handleDeselect = useCallback(() => {
+        setSelectedIds([]);
+    }, [setSelectedIds]);
 
     const handlePageAction = useCallback(async (pageId, action) => {
         let newPages = [...pages];
@@ -714,7 +772,6 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                     const [page] = newPages.splice(pageIndex, 1);
                     newPages.splice(pageIndex + 1, 0, page);
                 }
-                break;
                 break;
             case 'duplicate':
                 const pageToClone = newPages[pageIndex];
@@ -784,6 +841,65 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         setPages(newPages);
     }, [pages, setPages]);
 
+    const handleUpdatePage = useCallback((pageId, updates) => {
+        setPages(prevPages => prevPages.map(page =>
+            page.id === pageId ? { ...page, ...updates } : page
+        ));
+    }, [setPages]);
+
+    const handleDistribute = useCallback((direction) => {
+        if (selectedIds.length < 3) return;
+
+        setPages(prevPages => prevPages.map(page => {
+            const selectedElements = page.elements.filter(el => selectedIds.includes(el.id));
+            if (selectedElements.length < 3) return page;
+
+            const sorted = [...selectedElements].sort((a, b) => {
+                return direction === 'horizontal' ? a.x - b.x : a.y - b.y;
+            });
+
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+
+            const start = direction === 'horizontal' ? first.x : first.y;
+            const end = direction === 'horizontal'
+                ? last.x + (last.width || 0)
+                : last.y + (last.height || 0);
+
+            const totalSpace = end - start;
+            const totalSize = sorted.reduce((sum, el) => sum + (direction === 'horizontal' ? (el.width || 0) : (el.height || 0)), 0);
+            const gap = (totalSpace - totalSize) / (sorted.length - 1);
+
+            const positionMap = {};
+            let currentPos = start;
+
+            sorted.forEach((el, idx) => {
+                if (idx === 0) {
+                    // Keep first element in place
+                    positionMap[el.id] = direction === 'horizontal' ? el.x : el.y;
+                    currentPos = direction === 'horizontal' ? el.x + (el.width || 0) : el.y + (el.height || 0);
+                } else if (idx === sorted.length - 1) {
+                    // Keep last element in place
+                    positionMap[el.id] = direction === 'horizontal' ? el.x : el.y;
+                } else {
+                    positionMap[el.id] = currentPos + gap;
+                    currentPos = currentPos + gap + (direction === 'horizontal' ? (el.width || 0) : (el.height || 0));
+                }
+            });
+
+            return {
+                ...page,
+                elements: page.elements.map(el => {
+                    if (!selectedIds.includes(el.id)) return el;
+                    return {
+                        ...el,
+                        [direction === 'horizontal' ? 'x' : 'y']: positionMap[el.id]
+                    };
+                })
+            };
+        }));
+    }, [selectedIds, setPages]);
+
     const handleCut = useCallback(() => {
         if (selectedIds.length === 0) return;
         handleCopy();
@@ -808,6 +924,9 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         group: handleGroup,
         ungroup: handleUngroup,
         nudge: handleNudge,
+        selectAll: handleSelectAll,
+        deselect: handleDeselect,
+        addElement: handleAddElement,
         zoomIn: () => setScale(s => Math.min(3, s + 0.1)),
         zoomOut: () => setScale(s => Math.max(0.1, s - 0.1)),
         resetZoom: () => setScale(1),
@@ -816,9 +935,10 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
         startEditing: (id) => stageRef.current?.startEditing?.(id),
         setHandMode: setIsHandMode
     }, [
-        undo, redo, handleCopy, handlePaste, handleCut, 
-        handleDuplicateElement, handleDeleteElement, 
-        handleGroup, handleUngroup, handleNudge, 
+        undo, redo, handleCopy, handlePaste, handleCut,
+        handleDuplicateElement, handleDeleteElement,
+        handleGroup, handleUngroup, handleNudge,
+        handleSelectAll, handleDeselect, handleAddElement,
         triggerManualSave, activeSelection
     ]);
 
@@ -828,7 +948,7 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                 resumeTitle={title}
                 onTitleChange={setTitle}
                 saving={saving}
-                onDownload={handleExport}
+                onExport={handleExport}
                 onDelete={handleDeleteResume}
                 onUndo={undo}
                 onRedo={redo}
@@ -839,6 +959,7 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                     fetchVersions();
                 }}
                 onPublish={() => setIsPublishModalOpen(true)}
+                mode={mode}
             />
 
             <PublishModal
@@ -862,6 +983,7 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                 setShowEffects={setShowEffects}
                 onGroup={handleGroup}
                 onUngroup={handleUngroup}
+                onDistribute={handleDistribute}
             />
 
             {/* Effects Side Panel (Text or Image) */}
@@ -941,10 +1063,38 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                         onRestoreVersion={handleRestoreVersion}
                         onDeleteVersion={handleDeleteVersion}
                         profile={profile}
+                        pages={pages}
+                        onUpdatePage={handleUpdatePage}
+                        canvasWidth={canvasWidth}
+                        canvasHeight={canvasHeight}
+                        onCanvasResize={(w, h) => {
+                            setCanvasWidth(w);
+                            setCanvasHeight(h);
+                        }}
                     />
                 )}
 
                 <div className="flex-1 flex flex-col relative bg-gray-100 pb-10">
+                    {/* Right Side Panel - Section Visibility (Resume Mode Only) */}
+                    {mode === 'resume' && (
+                        <div className="absolute right-0 top-0 bottom-10 w-64 z-20 pointer-events-none">
+                            <div className="pointer-events-auto h-full overflow-y-auto">
+                                <SectionVisibilityToggle
+                                    canvasData={{ pages, sectionVisibility }}
+                                    onToggleSection={handleToggleSection}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Template Validation Sidebar (Developer Mode Only) */}
+                    {mode === 'developer' && (
+                        <div className="absolute right-0 top-0 bottom-10 w-72 z-20 pointer-events-none">
+                            <div className="pointer-events-auto h-full overflow-y-auto">
+                                <TemplateValidationSidebar pages={pages} />
+                            </div>
+                        </div>
+                    )}
                     <CanvasStage
                         ref={stageRef}
                         pages={pages}
@@ -968,8 +1118,19 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                         onCopy={handleCopy}
                         onCut={handleCut}
                         onPaste={handlePaste}
+                        onCopyStyle={handleCopyStyle}
+                        onPasteStyle={handlePasteStyle}
+                        onLink={(url) => {
+                            if (selectedIds.length > 0) {
+                                handleUpdateElement({ link: url });
+                            }
+                        }}
+                        onGroup={handleGroup}
+                        onUngroup={handleUngroup}
                         mode={mode}
                         mockData={mockData}
+                        pageWidth={canvasWidth}
+                        pageHeight={canvasHeight}
                     />
 
                     {/* Canva-style Footer */}
@@ -985,6 +1146,6 @@ export default function KonvaEditor({ initialData, resume, userUploads, mode = '
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     );
 }

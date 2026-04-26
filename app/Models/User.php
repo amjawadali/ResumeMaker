@@ -95,6 +95,21 @@ class User extends Authenticatable
         return $this->hasMany(Project::class)->orderBy('order');
     }
 
+    public function awards(): HasMany
+    {
+        return $this->hasMany(Award::class)->orderBy('order');
+    }
+
+    public function volunteerWorks(): HasMany
+    {
+        return $this->hasMany(VolunteerWork::class)->orderBy('order');
+    }
+
+    public function publications(): HasMany
+    {
+        return $this->hasMany(Publication::class)->orderBy('order');
+    }
+
     public function resumes(): HasMany
     {
         return $this->hasMany(Resume::class);

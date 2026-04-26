@@ -8,11 +8,19 @@ use App\Models\Experience;
 use App\Models\Skill;
 use App\Models\Language;
 use App\Models\UserDetail;
+use App\Models\Project;
+use App\Models\Award;
+use App\Models\VolunteerWork;
+use App\Models\Publication;
 use App\Http\Requests\StoreEducationRequest;
 use App\Http\Requests\StoreExperienceRequest;
 use App\Http\Requests\StoreSkillRequest;
 use App\Http\Requests\StoreLanguageRequest;
 use App\Http\Requests\StoreCertificationRequest;
+use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\StoreAwardRequest;
+use App\Http\Requests\StoreVolunteerWorkRequest;
+use App\Http\Requests\StorePublicationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Intervention\Image\ImageManager;
@@ -31,6 +39,10 @@ class UserDetailsController extends Controller
         $skills = $user->skills;
         $languages = $user->languages;
         $certifications = $user->certifications;
+        $projects = $user->projects;
+        $awards = $user->awards;
+        $volunteerWorks = $user->volunteerWorks;
+        $publications = $user->publications;
 
         return \Inertia\Inertia::render('UserDetails/Index', compact(
             'userDetail',
@@ -38,7 +50,11 @@ class UserDetailsController extends Controller
             'experiences',
             'skills',
             'languages',
-            'certifications'
+            'certifications',
+            'projects',
+            'awards',
+            'volunteerWorks',
+            'publications'
         ));
     }
 
@@ -237,6 +253,121 @@ class UserDetailsController extends Controller
         return redirect()->route('user-details.index')->with('success', 'Language deleted successfully!')->with('active_tab', 'languages');
     }
 
+    // Project CRUD
+    public function storeProject(StoreProjectRequest $request)
+    {
+        $validated = $request->validated();
+        $validated['user_id'] = auth()->id();
+        $validated['order'] = auth()->user()->projects()->max('order') + 1;
+
+        Project::create($validated);
+
+        return redirect()->route('user-details.index')->with('success', 'Project added successfully!')->with('active_tab', 'projects');
+    }
+
+    public function updateProject(StoreProjectRequest $request, Project $project)
+    {
+        $this->authorize('update', $project);
+        $project->update($request->validated());
+
+        return redirect()->route('user-details.index')->with('success', 'Project updated successfully!')->with('active_tab', 'projects');
+    }
+
+    public function deleteProject(Project $project)
+    {
+        $this->authorize('delete', $project);
+        $project->delete();
+
+        return redirect()->route('user-details.index')->with('success', 'Project deleted successfully!')->with('active_tab', 'projects');
+    }
+
+    // Award CRUD
+    public function storeAward(StoreAwardRequest $request)
+    {
+        $validated = $request->validated();
+        $validated['user_id'] = auth()->id();
+        $validated['order'] = auth()->user()->awards()->max('order') + 1;
+
+        Award::create($validated);
+
+        return redirect()->route('user-details.index')->with('success', 'Award added successfully!')->with('active_tab', 'awards');
+    }
+
+    public function updateAward(StoreAwardRequest $request, Award $award)
+    {
+        $this->authorize('update', $award);
+        $award->update($request->validated());
+
+        return redirect()->route('user-details.index')->with('success', 'Award updated successfully!')->with('active_tab', 'awards');
+    }
+
+    public function deleteAward(Award $award)
+    {
+        $this->authorize('delete', $award);
+        $award->delete();
+
+        return redirect()->route('user-details.index')->with('success', 'Award deleted successfully!')->with('active_tab', 'awards');
+    }
+
+    // VolunteerWork CRUD
+    public function storeVolunteerWork(StoreVolunteerWorkRequest $request)
+    {
+        $validated = $request->validated();
+        $validated['user_id'] = auth()->id();
+        $validated['currently_volunteering'] = $request->boolean('currently_volunteering');
+        $validated['order'] = auth()->user()->volunteerWorks()->max('order') + 1;
+
+        VolunteerWork::create($validated);
+
+        return redirect()->route('user-details.index')->with('success', 'Volunteer work added successfully!')->with('active_tab', 'volunteering');
+    }
+
+    public function updateVolunteerWork(StoreVolunteerWorkRequest $request, VolunteerWork $volunteerWork)
+    {
+        $this->authorize('update', $volunteerWork);
+        $validated = $request->validated();
+        $validated['currently_volunteering'] = $request->boolean('currently_volunteering');
+        $volunteerWork->update($validated);
+
+        return redirect()->route('user-details.index')->with('success', 'Volunteer work updated successfully!')->with('active_tab', 'volunteering');
+    }
+
+    public function deleteVolunteerWork(VolunteerWork $volunteerWork)
+    {
+        $this->authorize('delete', $volunteerWork);
+        $volunteerWork->delete();
+
+        return redirect()->route('user-details.index')->with('success', 'Volunteer work deleted successfully!')->with('active_tab', 'volunteering');
+    }
+
+    // Publication CRUD
+    public function storePublication(StorePublicationRequest $request)
+    {
+        $validated = $request->validated();
+        $validated['user_id'] = auth()->id();
+        $validated['order'] = auth()->user()->publications()->max('order') + 1;
+
+        Publication::create($validated);
+
+        return redirect()->route('user-details.index')->with('success', 'Publication added successfully!')->with('active_tab', 'publications');
+    }
+
+    public function updatePublication(StorePublicationRequest $request, Publication $publication)
+    {
+        $this->authorize('update', $publication);
+        $publication->update($request->validated());
+
+        return redirect()->route('user-details.index')->with('success', 'Publication updated successfully!')->with('active_tab', 'publications');
+    }
+
+    public function deletePublication(Publication $publication)
+    {
+        $this->authorize('delete', $publication);
+        $publication->delete();
+
+        return redirect()->route('user-details.index')->with('success', 'Publication deleted successfully!')->with('active_tab', 'publications');
+    }
+
     public function uploadImage(Request $request)
     {
         $request->validate([
@@ -245,15 +376,7 @@ class UserDetailsController extends Controller
 
         if ($request->hasFile('profile_image')) {
             $image = $request->file('profile_image');
-            $userId = auth()->id();
-            $filename = $userId . '_' . time() . '_' . $image->getClientOriginalName();
-            $path = 'uploads/' . $filename;
-
-            if (!Storage::disk('public')->exists('uploads')) {
-                Storage::disk('public')->makeDirectory('uploads');
-            }
-
-            Storage::disk('public')->put($path, file_get_contents($image));
+            $path = $image->store('uploads', 'public');
             
             return response()->json([
                 'url' => asset('storage/' . $path),
@@ -287,218 +410,6 @@ class UserDetailsController extends Controller
         return response()->json(['error' => 'File not found'], 404);
     }
 
-    /**
-     * Extract profile data from uploaded document (PDF, image, DOCX)
-     */
-    public function extractFromDocument(Request $request)
-    {
-        // Increase execution time to 10 minutes for AI processing
-        set_time_limit(600);
 
-        try {
-            // Check if we received raw text from frontend OCR
-            if ($request->has('text')) {
-                $request->validate([
-                    'text' => 'required|string',
-                ]);
-                
-                $text = $request->input('text');
-                
-                // Use Gemini if key is provided, otherwise fallback to free local Regex parser
-                if (!empty(config('services.gemini.api_key'))) {
-                    $extractor = new \App\Services\GeminiService();
-                } else {
-                    $extractor = new \App\Services\RegexExtractionService();
-                }
-                
-                $extractedData = $extractor->extractProfileDataFromText($text);
-                
-                // Sanitize and validate the extracted data
-                $dataSanitizer = new \App\Services\ProfileDataExtractor();
-                $sanitizedData = $dataSanitizer->sanitizeAndValidate($extractedData);
-                
-                return response()->json([
-                    'success' => true,
-                    'data' => $sanitizedData,
-                    'method' => (!empty(config('services.gemini.api_key'))) ? 'Gemini AI' : 'Free Regex Parser'
-                ]);
-            }
-        
-            // Fallback for file upload (Legacy support or if text is missing)
-            $request->validate([
-                'document' => 'required|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240', // 10MB max
-            ]);
-
-            $file = $request->file('document');
-            $extension = strtolower($file->getClientOriginalExtension());
-            
-            // Store uploaded file temporarily
-            $tempPath = storage_path('app/temp/uploads');
-            if (!file_exists($tempPath)) {
-                mkdir($tempPath, 0755, true);
-            }
-            
-            $uploadedPath = $tempPath . '/' . uniqid() . '_' . $file->getClientOriginalName();
-            $file->move($tempPath, basename($uploadedPath));
-            
-            // Convert document to images
-            $documentConverter = new \App\Services\DocumentConverterService();
-            $imagePaths = [];
-            
-            if ($extension === 'pdf') {
-                $imagePaths = $documentConverter->convertPdfToImages($uploadedPath);
-            } elseif (in_array($extension, ['doc', 'docx'])) {
-                $imagePaths = $documentConverter->convertDocxToImages($uploadedPath);
-            } else {
-                // It's already an image
-                $imagePaths = [$documentConverter->processImage($uploadedPath)];
-            }
-            
-            // Extract data from each image using AI
-            $gemini = new \App\Services\GeminiService();
-            // Note: Since GeminiService currently only supports text, we'll need to adapt it 
-            // if we want to support direct image extraction. 
-            // However, the current flow is usually FrontEnd OCR -> Backend text processing.
-            // If we hit this branch, we might need a fallback or a temporary solution.
-            // For now, let's assume text is always sent, but we'll adapt this for consistency.
-            
-            $aggregatedData = null;
-            
-            foreach ($imagePaths as $imagePath) {
-                // If we absolutely need image extraction here, we'd need another method in GeminiService.
-                // For now, we'll throw an error or handle it gracefully.
-                throw new \Exception('Image-based extraction is deprecated. Please use the "Create via AI" tab which uses EasyOCR.');
-            }
-            
-            // Sanitize and validate the extracted data
-            $extractor = new \App\Services\ProfileDataExtractor();
-            $sanitizedData = $extractor->sanitizeAndValidate($aggregatedData);
-            
-            // Clean up temporary files
-            $documentConverter->cleanupTempFiles(array_merge($imagePaths, [$uploadedPath]));
-            
-            return response()->json([
-                'success' => true,
-                'data' => $sanitizedData,
-            ]);
-            
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Document extraction error: ' . $e->getMessage());
-            
-            // Return 400 for known errors (like missing Imagick) to show to user
-            $status = str_contains($e->getMessage(), 'Imagick') || str_contains($e->getMessage(), 'upload an image') ? 400 : 500;
-            
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage(),
-            ], $status);
-        }
-    }
-
-    /**
-     * Save extracted profile data to database
-     */
-    public function saveExtractedData(Request $request)
-    {
-        $request->validate([
-            'data' => 'required|array',
-            'data.personal_info' => 'required|array',
-            'data.education' => 'array',
-            'data.experience' => 'array',
-            'data.skills' => 'array',
-            'data.certifications' => 'array',
-            'data.languages' => 'array',
-        ]);
-
-        try {
-            $user = auth()->user();
-            $data = $request->input('data');
-            
-            \Illuminate\Support\Facades\DB::beginTransaction();
-            
-            // Save personal info
-            if (!empty($data['personal_info'])) {
-                $userDetail = $user->userDetail ?? new UserDetail(['user_id' => $user->id]);
-                $userDetail->fill(array_filter($data['personal_info'], fn($value) => $value !== null));
-                $userDetail->save();
-            }
-            
-            // Save education
-            if (!empty($data['education'])) {
-                $maxOrder = $user->educations()->max('order') ?? 0;
-                foreach ($data['education'] as $edu) {
-                    $maxOrder++;
-                    Education::create(array_merge($edu, [
-                        'user_id' => $user->id,
-                        'order' => $maxOrder,
-                    ]));
-                }
-            }
-            
-            // Save experience
-            if (!empty($data['experience'])) {
-                $maxOrder = $user->experiences()->max('order') ?? 0;
-                foreach ($data['experience'] as $exp) {
-                    $maxOrder++;
-                    Experience::create(array_merge($exp, [
-                        'user_id' => $user->id,
-                        'order' => $maxOrder,
-                    ]));
-                }
-            }
-            
-            // Save skills
-            if (!empty($data['skills'])) {
-                $maxOrder = $user->skills()->max('order') ?? 0;
-                foreach ($data['skills'] as $skill) {
-                    $maxOrder++;
-                    Skill::create(array_merge($skill, [
-                        'user_id' => $user->id,
-                        'order' => $maxOrder,
-                    ]));
-                }
-            }
-            
-            // Save certifications
-            if (!empty($data['certifications'])) {
-                $maxOrder = $user->certifications()->max('order') ?? 0;
-                foreach ($data['certifications'] as $cert) {
-                    $maxOrder++;
-                    Certification::create(array_merge($cert, [
-                        'user_id' => $user->id,
-                        'order' => $maxOrder,
-                    ]));
-                }
-            }
-            
-            // Save languages
-            if (!empty($data['languages'])) {
-                $maxOrder = $user->languages()->max('order') ?? 0;
-                foreach ($data['languages'] as $lang) {
-                    $maxOrder++;
-                    Language::create(array_merge($lang, [
-                        'user_id' => $user->id,
-                        'order' => $maxOrder,
-                    ]));
-                }
-            }
-            
-            \Illuminate\Support\Facades\DB::commit();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile data saved successfully!',
-            ]);
-            
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
-            \Illuminate\Support\Facades\Log::error('Save extracted data error: ' . $e->getMessage());
-            
-            return response()->json([
-                'success' => false,
-                'error' => 'Failed to save profile data: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
 }
 

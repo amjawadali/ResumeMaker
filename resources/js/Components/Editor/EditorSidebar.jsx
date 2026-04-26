@@ -1,12 +1,14 @@
-import { LayoutTemplate, Shapes, Type, UploadCloud, FolderOpen, Contact } from 'lucide-react';
+import { LayoutTemplate, Shapes, Type, UploadCloud, FolderOpen, Contact, Smile, Image as ImageIcon } from 'lucide-react';
 
 export default function EditorSidebar({ activeTab, onTabChange }) {
     const tabs = [
         { id: 'design', label: 'Design', icon: LayoutTemplate },
         { id: 'elements', label: 'Elements', icon: Shapes },
         { id: 'text', label: 'Text', icon: Type },
+        { id: 'icons', label: 'Icons', icon: Smile },
         { id: 'uploads', label: 'Uploads', icon: UploadCloud },
         { id: 'projects', label: 'Projects', icon: FolderOpen },
+        { id: 'photos', label: 'Photos', icon: ImageIcon },
         { id: 'profile', label: 'Profile', icon: Contact },
     ];
 

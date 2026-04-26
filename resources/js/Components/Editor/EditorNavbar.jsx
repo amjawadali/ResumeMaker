@@ -1,7 +1,18 @@
 import { Link } from '@inertiajs/react';
-import { Home, Undo, Redo, Cloud, ChevronDown, Share2, Download, Menu, Trash2, Check, UploadCloud } from 'lucide-react';
+import { Home, Undo, Redo, Cloud, ChevronDown, Share2, Download, Menu, Trash2, Check, UploadCloud, FileImage, FileText } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 
-export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDownload, onDelete, onUndo, onRedo, canUndo, canRedo, onHistoryClick, onPublish }) {
+export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDownload, onDelete, onUndo, onRedo, canUndo, canRedo, onHistoryClick, onPublish, onExport, mode }) {
+    const [exportOpen, setExportOpen] = useState(false);
+    const exportRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+        };
+        if (exportOpen) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [exportOpen]);
     return (
         <div className="h-14 bg-[#0e1217] text-white flex items-center justify-between px-4 select-none shrink-0 z-50 shadow-md border-b border-white/5">
             {/* Left Section: Home & Menu */}
@@ -96,21 +107,43 @@ export default function EditorNavbar({ resumeTitle, onTitleChange, saving, onDow
 
                 <div className="h-6 w-px bg-white/10 mx-1"></div>
 
-                <button
-                    onClick={onPublish}
-                    className="flex items-center gap-2 bg-[#7D2AE8] text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#6a24c5] active:scale-95 transition-all shadow-lg shadow-purple-900/20"
-                >
-                    <UploadCloud size={16} />
-                    <span>Publish</span>
-                </button>
+                {mode === 'developer' && (
+                    <button
+                        onClick={onPublish}
+                        className="flex items-center gap-2 bg-[#7D2AE8] text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#6a24c5] active:scale-95 transition-all shadow-lg shadow-purple-900/20"
+                    >
+                        <UploadCloud size={16} />
+                        <span>Publish</span>
+                    </button>
+                )}
 
-                <button
-                    onClick={onDownload}
-                    className="flex items-center gap-2 bg-white text-slate-900 px-5 py-2 rounded-lg font-bold text-sm hover:bg-gray-100 active:scale-95 transition-all shadow-md"
-                >
-                    <Download size={16} />
-                    <span>Download</span>
-                </button>
+                <div className="relative" ref={exportRef}>
+                    <button
+                        onClick={() => setExportOpen(!exportOpen)}
+                        className="flex items-center gap-2 bg-white text-slate-900 px-5 py-2 rounded-lg font-bold text-sm hover:bg-gray-100 active:scale-95 transition-all shadow-md"
+                    >
+                        <Download size={16} />
+                        <span>Download</span>
+                        <ChevronDown size={14} className={`ml-1 transition-transform ${exportOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {exportOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-50 overflow-hidden">
+                            <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Export</div>
+                            <button onClick={() => { onExport?.('png'); setExportOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors text-left">
+                                <FileImage size={16} className="text-purple-500" />
+                                <span>PNG Image</span>
+                            </button>
+                            <button onClick={() => { onExport?.('jpg'); setExportOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors text-left">
+                                <FileImage size={16} className="text-blue-500" />
+                                <span>JPG Image</span>
+                            </button>
+                            <button onClick={() => { onExport?.('pdf'); setExportOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-sm text-gray-700 transition-colors text-left">
+                                <FileText size={16} className="text-red-500" />
+                                <span>PDF Document</span>
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

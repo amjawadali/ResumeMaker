@@ -21,6 +21,10 @@ export function useEditorShortcuts(actions, deps = []) {
                         if (e.shiftKey) actions.redo?.();
                         else actions.undo?.();
                         break;
+                    case 'a':
+                        e.preventDefault();
+                        actions.selectAll?.();
+                        break;
                     case 'y':
                         e.preventDefault();
                         actions.redo?.();
@@ -67,31 +71,74 @@ export function useEditorShortcuts(actions, deps = []) {
             } else {
                 // Secondary Shortcuts (no modifier)
                 switch (e.key) {
+                    case 'Escape':
+                        actions.deselect?.();
+                        break;
                     case 'Delete':
                     case 'Backspace':
                         actions.delete?.();
                         break;
                     case 'ArrowLeft':
                         e.preventDefault();
-                        actions.nudge?.(e.shiftKey ? -10 : -1, 0);
+                        if (e.altKey) {
+                            actions.duplicate?.();
+                            setTimeout(() => actions.nudge?.(e.shiftKey ? -10 : -1, 0), 0);
+                        } else {
+                            actions.nudge?.(e.shiftKey ? -10 : -1, 0);
+                        }
                         break;
                     case 'ArrowRight':
                         e.preventDefault();
-                        actions.nudge?.(e.shiftKey ? 10 : 1, 0);
+                        if (e.altKey) {
+                            actions.duplicate?.();
+                            setTimeout(() => actions.nudge?.(e.shiftKey ? 10 : 1, 0), 0);
+                        } else {
+                            actions.nudge?.(e.shiftKey ? 10 : 1, 0);
+                        }
                         break;
                     case 'ArrowUp':
                         e.preventDefault();
-                        actions.nudge?.(0, e.shiftKey ? -10 : -1);
+                        if (e.altKey) {
+                            actions.duplicate?.();
+                            setTimeout(() => actions.nudge?.(0, e.shiftKey ? -10 : -1), 0);
+                        } else {
+                            actions.nudge?.(0, e.shiftKey ? -10 : -1);
+                        }
                         break;
                     case 'ArrowDown':
                         e.preventDefault();
-                        actions.nudge?.(0, e.shiftKey ? 10 : 1);
+                        if (e.altKey) {
+                            actions.duplicate?.();
+                            setTimeout(() => actions.nudge?.(0, e.shiftKey ? 10 : 1), 0);
+                        } else {
+                            actions.nudge?.(0, e.shiftKey ? 10 : 1);
+                        }
                         break;
                     case 'Enter':
                         if (actions.activeSelection?.type === 'text' && !e.shiftKey) {
                             e.preventDefault();
                             actions.startEditing?.(actions.activeSelection.id);
                         }
+                        break;
+                    case 't':
+                    case 'T':
+                        e.preventDefault();
+                        actions.addElement?.('text');
+                        break;
+                    case 'r':
+                    case 'R':
+                        e.preventDefault();
+                        actions.addElement?.('rect');
+                        break;
+                    case 'c':
+                    case 'C':
+                        e.preventDefault();
+                        actions.addElement?.('circle');
+                        break;
+                    case 'l':
+                    case 'L':
+                        e.preventDefault();
+                        actions.addElement?.('line');
                         break;
                     default:
                         break;

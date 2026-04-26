@@ -5,7 +5,7 @@ import { Copy, Scissors, Files, Trash2, Lock, Unlock, Layers, MoveUp, MoveDown, 
  * Professional Context Menu Component
  * Replaces browser default right-click menu with custom options
  */
-export default function ContextMenu({ position, onClose, selection, onCopy, onCut, onPaste, onDuplicate, onDelete, onLock, onLayerAction, onGroup, onUngroup, canPaste }) {
+export default function ContextMenu({ position, onClose, selection, onCopy, onCut, onPaste, onDuplicate, onDelete, onLock, onLayerAction, onGroup, onUngroup, canGroup, canUngroup, canPaste }) {
     const menuRef = useRef(null);
 
     useEffect(() => {
@@ -40,6 +40,9 @@ export default function ContextMenu({ position, onClose, selection, onCopy, onCu
             { icon: Files, label: 'Duplicate', shortcut: 'Ctrl+D', action: onDuplicate },
             { divider: true },
             { icon: selection.locked ? Unlock : Lock, label: selection.locked ? 'Unlock' : 'Lock', action: onLock },
+            { divider: true },
+            { icon: GroupIcon, label: 'Group', shortcut: 'Ctrl+G', action: onGroup },
+            { icon: Ungroup, label: 'Ungroup', shortcut: 'Ctrl+Shift+G', action: onUngroup },
             { divider: true },
             { icon: MoveUp, label: 'Bring to Front', action: () => onLayerAction('front') },
             { icon: MoveDown, label: 'Send to Back', action: () => onLayerAction('back') },

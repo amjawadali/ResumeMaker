@@ -6,8 +6,10 @@ import InputLabel from '@/Components/InputLabel';
 import { CheckCircle, Wand2 } from 'lucide-react';
 import KonvaPreview from '@/Components/Editor/Canvas/KonvaPreview';
 import MagicPreview from '@/Components/Marketplace/MagicPreview';
+import PreFlightCheck from '@/Components/ResumeMaking/PreFlightCheck';
 import { createPremiumTemplate } from '@/Utils/KonvaTemplateLoader';
 import ScaleFit from '@/Components/ScaleFit';
+import { useState } from 'react';
 
 export default function Create({ auth, templates, template_id, data: previewData }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -27,8 +29,14 @@ export default function Create({ auth, templates, template_id, data: previewData
     );
     const defaultPages = defaultTemplate.pages;
 
-    const submit = (e) => {
+    const [isPreFlightOpen, setIsPreFlightOpen] = useState(false);
+
+    const handleSubmit = (e) => {
         e.preventDefault();
+        setIsPreFlightOpen(true);
+    };
+
+    const proceedWithCreate = () => {
         post(route('resumes.store'));
     };
 
@@ -51,7 +59,7 @@ export default function Create({ auth, templates, template_id, data: previewData
                         </p>
                     </div>
 
-                    <form onSubmit={submit} className="relative z-10">
+                    <form onSubmit={handleSubmit} className="relative z-10">
                         {/* Name Input Section */}
                         <div className="max-w-md mx-auto mb-12 relative group">
                             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
@@ -94,9 +102,9 @@ export default function Create({ auth, templates, template_id, data: previewData
                                                 </div>
                                             </div>
                                         ) : (
-                                            <MagicPreview 
-                                                canvasData={template.canvas_data} 
-                                                profile={previewDataValues} 
+                                            <MagicPreview
+                                                canvasData={template.canvas_data}
+                                                profile={previewDataValues}
                                             />
                                         )}
                                     </div>
@@ -130,6 +138,14 @@ export default function Create({ auth, templates, template_id, data: previewData
                             ))}
                         </div>
                     </form>
+
+                    <PreFlightCheck
+                        isOpen={isPreFlightOpen}
+                        onClose={() => setIsPreFlightOpen(false)}
+                        template={templates.find(t => t.id === data.template_id)}
+                        profile={previewDataValues}
+                        onProceed={proceedWithCreate}
+                    />
                 </div>
             </div>
         </AuthenticatedLayout>

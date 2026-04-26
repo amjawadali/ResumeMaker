@@ -22,6 +22,7 @@ class Experience extends Model
         'currently_working',
         'responsibilities',
         'achievements',
+        'description',
         'order',
     ];
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, router, usePage } from '@inertiajs/react'; // usePage to access flash messages if needed directly or via props
-import { User, GraduationCap, Briefcase, Zap, Award, Languages, Plus, Trash2, Edit2, ChevronDown, Search, Share2, ChevronRight, CheckCircle, AlertCircle, Camera, UploadCloud, X, Sparkles, FileText, Loader2 } from 'lucide-react';
+import { User, GraduationCap, Briefcase, Zap, Award, Languages, Plus, Trash2, Edit2, ChevronDown, Search, Share2, ChevronRight, Camera, X, Layout, Heart, BookOpen, Sparkles } from 'lucide-react';
 import axios from 'axios';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
@@ -10,24 +10,24 @@ import InputError from '@/Components/InputError';
 import Modal from '@/Components/Modal';
 import { toast } from 'sonner';
 import { confirmAction } from '@/Components/ConfirmDialog';
+import ProfileProgress from '@/Components/ProfileBuilder/ProfileProgress';
 
-export default function UserDetails({ auth, userDetail, educations, experiences, skills, certifications, languages }) {
+export default function UserDetails({ auth, userDetail, educations, experiences, skills, certifications, languages, projects, awards, volunteerWorks, publications }) {
     const [activeTab, setActiveTab] = useState('personal');
     const [showMultimediaModal, setShowMultimediaModal] = useState(false); // For image upload if needed
 
-    // AI Extraction states
-    const [selectedFile, setSelectedFile] = useState(null);
-    const [filePreview, setFilePreview] = useState(null);
-    const [extracting, setExtracting] = useState(false);
-    const [extractedData, setExtractedData] = useState(null);
-    const [saving, setSaving] = useState(false);
+
     // Modal states
     const [modals, setModals] = useState({
         education: false,
         experience: false,
         skill: false,
         certification: false,
-        language: false
+        language: false,
+        project: false,
+        award: false,
+        volunteer: false,
+        publication: false
     });
     const toggleModal = (key, val) => setModals(m => ({ ...m, [key]: val }));
 
@@ -37,9 +37,12 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
         email: userDetail?.email || '',
         phone: userDetail?.phone || '',
         address: userDetail?.address || '',
+        city: userDetail?.city || '',
+        state: userDetail?.state || '',
+        zip_code: userDetail?.zip_code || '',
+        country: userDetail?.country || '',
         website: userDetail?.website || '',
         professional_summary: userDetail?.professional_summary || '',
-        // social_links parsing logic might be complex if JSON is passed, assume it's array
         social_links: userDetail?.social_links || [],
         profile_photo: null,
     });
@@ -66,12 +69,12 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
     const removePhoto = () => {
         setPersonalData('profile_photo', null);
         setPhotoPreview(null);
-        // Note: Actual server deletion would require a separate endpoint if we wanted to delete it immediately, 
-        // but setting it to null here primarily clears the *new* upload. 
+        // Note: Actual server deletion would require a separate endpoint if we wanted to delete it immediately,
+        // but setting it to null here primarily clears the *new* upload.
         // If we want to remove the existing one, we might need a flag or separate action.
         // For now, let's assume this just clears the current selection/preview.
         if (userDetail?.profile_photo) {
-            setPhotoPreview(`/storage/${userDetail.profile_photo}`); // Restore original if we just cancelled a new upload? 
+            setPhotoPreview(`/storage/${userDetail.profile_photo}`); // Restore original if we just cancelled a new upload?
             // Or if used to remove existing, we need a way to signal "delete" to backend.
             // Simpler approach for now: Just clear the input and preview of NEW file.
         }
@@ -107,35 +110,23 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
             <div className="relative py-10 bg-[#0f172a] min-h-screen text-slate-300">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-10">
-                        {/* Sidebar */}
+                        {/* Left Sidebar */}
                         <div className="lg:col-span-1">
-                            <div className="glass-panel bg-white/5 rounded-3xl shadow-2xl overflow-hidden sticky top-24 border border-white/5">
-                                <div className="p-6 border-b border-white/5 bg-white/5 relative overflow-hidden">
-                                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Workspace</h3>
-                                    <p className="text-xl font-black text-white leading-tight tracking-tight">Profile Builder</p>
-                                </div>
-                                <nav className="p-3 space-y-1">
-                                    {[
-                                        { id: 'personal', label: 'Personal Info', icon: <User size={16} /> },
-                                        { id: 'education', label: 'Education', icon: <GraduationCap size={16} /> },
-                                        { id: 'experience', label: 'Experience', icon: <Briefcase size={16} /> },
-                                        { id: 'skills', label: 'Skills', icon: <Zap size={16} /> },
-                                        { id: 'certifications', label: 'Certifications', icon: <Award size={16} /> },
-                                        { id: 'languages', label: 'Languages', icon: <Languages size={16} /> },
-                                        { id: 'ai-extract', label: 'Create via AI', icon: <Sparkles size={16} /> },
-                                    ].map(tab => (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveTab(tab.id)}
-                                            className={`w-full flex items-center px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all duration-300 group ${activeTab === tab.id ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center mr-3 transition-all ${activeTab === tab.id ? 'bg-white/20' : 'bg-slate-800'}`}>
-                                                {tab.icon}
-                                            </div>
-                                            <span className="font-bold tracking-wider">{tab.label}</span>
-                                        </button>
-                                    ))}
-                                </nav>
+                            <div className="sticky top-24 space-y-6">
+                                <ProfileProgress
+                                    userDetail={userDetail}
+                                    educations={educations}
+                                    experiences={experiences}
+                                    skills={skills}
+                                    certifications={certifications}
+                                    languages={languages}
+                                    projects={projects}
+                                    awards={awards}
+                                    volunteerWorks={volunteerWorks}
+                                    publications={publications}
+                                    onSectionClick={(section) => setActiveTab(section)}
+                                />
+                              
                             </div>
                         </div>
 
@@ -247,6 +238,42 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                 />
                                                 <InputError message={errorsPersonal.address} className="mt-2" />
                                             </div>
+                                            <div>
+                                                <InputLabel value="City" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
+                                                <TextInput
+                                                    value={personalData.city}
+                                                    onChange={e => setPersonalData('city', e.target.value)}
+                                                    className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                                <InputError message={errorsPersonal.city} className="mt-2" />
+                                            </div>
+                                            <div>
+                                                <InputLabel value="State / Province" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
+                                                <TextInput
+                                                    value={personalData.state}
+                                                    onChange={e => setPersonalData('state', e.target.value)}
+                                                    className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                                <InputError message={errorsPersonal.state} className="mt-2" />
+                                            </div>
+                                            <div>
+                                                <InputLabel value="Zip / Postal Code" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
+                                                <TextInput
+                                                    value={personalData.zip_code}
+                                                    onChange={e => setPersonalData('zip_code', e.target.value)}
+                                                    className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                                <InputError message={errorsPersonal.zip_code} className="mt-2" />
+                                            </div>
+                                            <div>
+                                                <InputLabel value="Country" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
+                                                <TextInput
+                                                    value={personalData.country}
+                                                    onChange={e => setPersonalData('country', e.target.value)}
+                                                    className="block w-full rounded-xl border-white/10 bg-white/5 h-10 px-4 text-sm font-medium text-white focus:ring-purple-500 focus:border-purple-500"
+                                                />
+                                                <InputError message={errorsPersonal.country} className="mt-2" />
+                                            </div>
                                             <div className="md:col-span-2">
                                                 <InputLabel value="Website / Portfolio" className="font-bold text-[10px] uppercase tracking-wider text-slate-400 mb-1.5" />
                                                 <TextInput
@@ -297,6 +324,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">
                                                             {edu.start_date} — {edu.currently_studying ? 'Present' : edu.end_date}
                                                         </p>
+                                                        {edu.description && <p className="text-sm text-slate-400 mt-3 line-clamp-2">{edu.description}</p>}
                                                     </div>
                                                     <button onClick={() => handleDelete(route('user-details.education.destroy', edu.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Trash2 size={20} />
@@ -330,6 +358,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                                     <div>
                                                         <h4 className="font-black text-xl text-white">{exp.position}</h4>
                                                         <p className="font-bold text-slate-400 text-lg">{exp.company}</p>
+                                                        {exp.description && <p className="text-sm text-slate-400 mt-3 line-clamp-2">{exp.description}</p>}
                                                     </div>
                                                     <button onClick={() => handleDelete(route('user-details.experience.destroy', exp.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <Trash2 size={20} />
@@ -425,23 +454,129 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                                 </div>
                             )}
 
-                            {/* AI Extraction Tab */}
-                            {activeTab === 'ai-extract' && (
-                                <AiExtractionTab
-                                    selectedFile={selectedFile}
-                                    setSelectedFile={setSelectedFile}
-                                    filePreview={filePreview}
-                                    setFilePreview={setFilePreview}
-                                    extracting={extracting}
-                                    setExtracting={setExtracting}
-                                    extractedData={extractedData}
-                                    setExtractedData={setExtractedData}
-                                    saving={saving}
-                                    setSaving={setSaving}
-                                />
+                            {/* Projects Tab */}
+                            {activeTab === 'projects' && (
+                                <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] shadow-xl border border-white/10 p-10 animate-fade-in-up">
+                                    <div className="flex items-center justify-between mb-12">
+                                        <div>
+                                            <h3 className="text-2xl font-black text-white">Projects</h3>
+                                        </div>
+                                        <button onClick={() => toggleModal('project', true)} className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center text-white shadow-lg hover:scale-110 transition-all">
+                                            <Plus size={32} />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-6">
+                                        {projects.map(project => (
+                                            <div key={project.id} className="group relative bg-white/5 border border-white/5 rounded-[2rem] p-8 hover:bg-white/10 transition-all">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h4 className="font-black text-xl text-white">{project.title}</h4>
+                                                        {project.technologies && <p className="text-slate-400 font-medium">{project.technologies}</p>}
+                                                        {project.url && <a href={project.url} target="_blank" className="text-purple-400 text-sm hover:underline">{project.url}</a>}
+                                                    </div>
+                                                    <button onClick={() => handleDelete(route('user-details.project.destroy', project.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
 
+                            {/* Awards Tab */}
+                            {activeTab === 'awards' && (
+                                <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] shadow-xl border border-white/10 p-10 animate-fade-in-up">
+                                    <div className="flex items-center justify-between mb-12">
+                                        <div>
+                                            <h3 className="text-2xl font-black text-white">Honors & Awards</h3>
+                                        </div>
+                                        <button onClick={() => toggleModal('award', true)} className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center text-white shadow-lg hover:scale-110 transition-all">
+                                            <Plus size={32} />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-6">
+                                        {awards.map(award => (
+                                            <div key={award.id} className="group relative bg-white/5 border border-white/5 rounded-[2rem] p-8 hover:bg-white/10 transition-all">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h4 className="font-black text-xl text-white">{award.title}</h4>
+                                                        <p className="font-bold text-slate-400">{award.issuer}</p>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">{award.date}</p>
+                                                    </div>
+                                                    <button onClick={() => handleDelete(route('user-details.award.destroy', award.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Volunteering Tab */}
+                            {activeTab === 'volunteering' && (
+                                <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] shadow-xl border border-white/10 p-10 animate-fade-in-up">
+                                    <div className="flex items-center justify-between mb-12">
+                                        <div>
+                                            <h3 className="text-2xl font-black text-white">Volunteer Work</h3>
+                                        </div>
+                                        <button onClick={() => toggleModal('volunteer', true)} className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center text-white shadow-lg hover:scale-110 transition-all">
+                                            <Plus size={32} />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-6">
+                                        {volunteerWorks.map(work => (
+                                            <div key={work.id} className="group relative bg-white/5 border border-white/5 rounded-[2rem] p-8 hover:bg-white/10 transition-all">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h4 className="font-black text-xl text-white">{work.organization}</h4>
+                                                        <p className="font-bold text-slate-400">{work.role}</p>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">
+                                                            {work.start_date} — {work.end_date}
+                                                        </p>
+                                                    </div>
+                                                    <button onClick={() => handleDelete(route('user-details.volunteer-work.destroy', work.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Publications Tab */}
+                            {activeTab === 'publications' && (
+                                <div className="bg-white/5 backdrop-blur-xl rounded-[2.5rem] shadow-xl border border-white/10 p-10 animate-fade-in-up">
+                                    <div className="flex items-center justify-between mb-12">
+                                        <div>
+                                            <h3 className="text-2xl font-black text-white">Publications</h3>
+                                        </div>
+                                        <button onClick={() => toggleModal('publication', true)} className="w-16 h-16 bg-gradient-to-br from-purple-600 to-pink-600 rounded-2xl flex items-center justify-center text-white shadow-lg hover:scale-110 transition-all">
+                                            <Plus size={32} />
+                                        </button>
+                                    </div>
+                                    <div className="space-y-6">
+                                        {publications.map(pub => (
+                                            <div key={pub.id} className="group relative bg-white/5 border border-white/5 rounded-[2rem] p-8 hover:bg-white/10 transition-all">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h4 className="font-black text-xl text-white">{pub.title}</h4>
+                                                        <p className="font-bold text-slate-400">{pub.publisher}</p>
+                                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mt-2">{pub.date}</p>
+                                                    </div>
+                                                    <button onClick={() => handleDelete(route('user-details.publication.destroy', pub.id))} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
+
                     </div>
                 </div>
 
@@ -476,6 +611,30 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
                         <LanguageForm onSuccess={() => toggleModal('language', false)} />
                     </div>
                 </Modal>
+                <Modal show={modals.project} onClose={() => toggleModal('project', false)}>
+                    <div className="p-10 bg-[#1e293b] text-white">
+                        <h2 className="text-2xl font-black mb-6">Add Project</h2>
+                        <ProjectForm onSuccess={() => toggleModal('project', false)} />
+                    </div>
+                </Modal>
+                <Modal show={modals.award} onClose={() => toggleModal('award', false)}>
+                    <div className="p-10 bg-[#1e293b] text-white">
+                        <h2 className="text-2xl font-black mb-6">Add Award</h2>
+                        <AwardForm onSuccess={() => toggleModal('award', false)} />
+                    </div>
+                </Modal>
+                <Modal show={modals.volunteer} onClose={() => toggleModal('volunteer', false)}>
+                    <div className="p-10 bg-[#1e293b] text-white">
+                        <h2 className="text-2xl font-black mb-6">Add Volunteer Work</h2>
+                        <VolunteerForm onSuccess={() => toggleModal('volunteer', false)} />
+                    </div>
+                </Modal>
+                <Modal show={modals.publication} onClose={() => toggleModal('publication', false)}>
+                    <div className="p-10 bg-[#1e293b] text-white">
+                        <h2 className="text-2xl font-black mb-6">Add Publication</h2>
+                        <PublicationForm onSuccess={() => toggleModal('publication', false)} />
+                    </div>
+                </Modal>
             </div>
         </AuthenticatedLayout>
     );
@@ -484,7 +643,7 @@ export default function UserDetails({ auth, userDetail, educations, experiences,
 // Sub-components for Forms to keep main file clean-ish
 function EducationForm({ onSuccess }) {
     const { data, setData, post, processing, errors } = useForm({
-        institution: '', degree: '', start_date: '', end_date: '', currently_studying: false, description: ''
+        institution: '', degree: '', start_date: '', end_date: '', currently_studying: false, description: '', city: '', country: '', gpa: ''
     });
 
     const submit = (e) => {
@@ -494,36 +653,58 @@ function EducationForm({ onSuccess }) {
 
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div>
-                <InputLabel value="Institution" />
-                <TextInput value={data.institution} onChange={e => setData('institution', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                <InputError message={errors.institution} className="mt-2" />
-            </div>
-            <div>
-                <InputLabel value="Degree" />
-                <TextInput value={data.degree} onChange={e => setData('degree', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                <InputError message={errors.degree} className="mt-2" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <InputLabel value="Start Date" />
-                    <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                    <InputError message={errors.start_date} className="mt-2" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                    <InputLabel value="Institution" />
+                    <TextInput value={data.institution} onChange={e => setData('institution', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.institution} className="mt-2" />
+                </div>
+                <div className="md:col-span-2">
+                    <InputLabel value="Degree" />
+                    <TextInput value={data.degree} onChange={e => setData('degree', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.degree} className="mt-2" />
                 </div>
                 <div>
-                    <InputLabel value="End Date" />
-                    <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                    <InputError message={errors.end_date} className="mt-2" />
+                    <InputLabel value="City" />
+                    <TextInput value={data.city} onChange={e => setData('city', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.city} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="Country" />
+                    <TextInput value={data.country} onChange={e => setData('country', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.country} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="GPA" />
+                    <TextInput value={data.gpa} onChange={e => setData('gpa', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.gpa} className="mt-2" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:col-span-1">
+                    <div>
+                        <InputLabel value="Start Date" />
+                        <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                        <InputError message={errors.start_date} className="mt-2" />
+                    </div>
+                    <div>
+                        <InputLabel value="End Date" />
+                        <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                        <InputError message={errors.end_date} className="mt-2" />
+                    </div>
+                </div>
+                <div className="md:col-span-2">
+                    <InputLabel value="Description" />
+                    <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                    <InputError message={errors.description} className="mt-2" />
                 </div>
             </div>
-            <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Education</PrimaryButton></div>
         </form>
     );
 }
 
 function ExperienceForm({ onSuccess }) {
     const { data, setData, post, processing, errors } = useForm({
-        company: '', position: '', start_date: '', end_date: '', currently_working: false, location: '', responsibilities: ''
+        company: '', position: '', start_date: '', end_date: '', currently_working: false, location: '', city: '', country: '', is_remote: false, responsibilities: '', description: ''
     });
 
     const submit = (e) => {
@@ -533,29 +714,52 @@ function ExperienceForm({ onSuccess }) {
 
     return (
         <form onSubmit={submit} className="space-y-6">
-            <div>
-                <InputLabel value="Company" />
-                <TextInput value={data.company} onChange={e => setData('company', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                <InputError message={errors.company} className="mt-2" />
-            </div>
-            <div>
-                <InputLabel value="Position" />
-                <TextInput value={data.position} onChange={e => setData('position', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                <InputError message={errors.position} className="mt-2" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <InputLabel value="Start Date" />
-                    <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                    <InputError message={errors.start_date} className="mt-2" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                    <InputLabel value="Company" />
+                    <TextInput value={data.company} onChange={e => setData('company', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.company} className="mt-2" />
+                </div>
+                <div className="md:col-span-2">
+                    <InputLabel value="Position" />
+                    <TextInput value={data.position} onChange={e => setData('position', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.position} className="mt-2" />
                 </div>
                 <div>
-                    <InputLabel value="End Date" />
-                    <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
-                    <InputError message={errors.end_date} className="mt-2" />
+                    <InputLabel value="City" />
+                    <TextInput value={data.city} onChange={e => setData('city', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.city} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="Country" />
+                    <TextInput value={data.country} onChange={e => setData('country', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.country} className="mt-2" />
+                </div>
+                <div className="md:col-span-2">
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={data.is_remote} onChange={e => setData('is_remote', e.target.checked)} className="rounded border-white/10 bg-[#0f172a] text-purple-600 focus:ring-purple-500" />
+                        <span className="text-sm text-slate-400">This is a Remote position</span>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 md:col-span-1">
+                    <div>
+                        <InputLabel value="Start Date" />
+                        <TextInput type="date" value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                        <InputError message={errors.start_date} className="mt-2" />
+                    </div>
+                    <div>
+                        <InputLabel value="End Date" />
+                        <TextInput type="date" value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                        <InputError message={errors.end_date} className="mt-2" />
+                    </div>
+                </div>
+                <div className="md:col-span-2">
+                    <InputLabel value="Description / Responsibilities" />
+                    <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                    <InputError message={errors.description} className="mt-2" />
                 </div>
             </div>
-            <div className="flex justify-end"><PrimaryButton disabled={processing}>Save</PrimaryButton></div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Experience</PrimaryButton></div>
         </form>
     );
 }
@@ -636,421 +840,164 @@ function LanguageForm({ onSuccess }) {
     );
 }
 
-// AI Extraction Tab Component
-function AiExtractionTab({ selectedFile, setSelectedFile, filePreview, setFilePreview, extracting, setExtracting, extractedData, setExtractedData, saving, setSaving }) {
+function ProjectForm({ onSuccess }) {
+    const { data, setData, post, processing, errors } = useForm({
+        title: '', url: '', technologies: '', description: ''
+    });
 
-    const handleFileDrop = (e) => {
+    const submit = (e) => {
         e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            handleFileSelect(file);
-        }
-    };
-
-    const handleFileSelect = (file) => {
-        const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
-
-        if (!validTypes.includes(file.type)) {
-            toast.error('Please upload a PDF, image (JPG/PNG), or Word document');
-            return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) { // 10MB
-            toast.error('File size must be less than 10MB');
-            return;
-        }
-
-        setSelectedFile(file);
-
-        // Create preview for images
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (e) => setFilePreview(e.target.result);
-            reader.readAsDataURL(file);
-        } else {
-            setFilePreview(null);
-        }
-    };
-
-    const handleExtract = async () => {
-        if (!selectedFile) {
-            toast.error('Please select a file first');
-            return;
-        }
-
-        setExtracting(true);
-
-        try {
-            // 1. Perform OCR using OCR.space API
-            const ocrFormData = new FormData();
-            ocrFormData.append('file', selectedFile);
-            ocrFormData.append('language', 'eng');
-            ocrFormData.append('isOverlayRequired', 'true');
-            ocrFormData.append('OCREngine', '2'); // Engine 2 is generally better for resumes
-
-            const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
-                method: 'POST',
-                headers: {
-                    'apikey': 'K81916881788957'
-                },
-                body: ocrFormData
-            });
-
-            if (!ocrResponse.ok) {
-                throw new Error('OCR API failed');
-            }
-
-            const ocrData = await ocrResponse.json();
-
-            if (ocrData.OCRExitCode !== 1 && ocrData.OCRExitCode !== 2) {
-                throw new Error(ocrData.ErrorMessage || 'OCR failed to process the image');
-            }
-
-            // Extract words and coordinates from OCR.space format
-            const words = [];
-            if (ocrData.ParsedResults && ocrData.ParsedResults.length > 0) {
-                ocrData.ParsedResults.forEach(result => {
-                    if (result.TextOverlay && result.TextOverlay.Lines) {
-                        result.TextOverlay.Lines.forEach(line => {
-                            if (line.Words) {
-                                line.Words.forEach(w => {
-                                    words.push({
-                                        text: w.WordText,
-                                        left: w.Left,
-                                        top: w.Top,
-                                        bottom: w.Top + w.Height
-                                    });
-                                });
-                            }
-                        });
-                    }
-                });
-            }
-
-            if (words.length === 0) {
-                throw new Error('No text detected in the document');
-            }
-
-            // 2. Process and Stitch Text
-            // Sort by top (y) then left (x) with tolerance for same-line items
-            const sortedWords = words.sort((a, b) => {
-                if (Math.abs(a.top - b.top) < 15) { // Adjusted tolerance for OCR.space
-                    return a.left - b.left;
-                }
-                return a.top - b.top;
-            });
-
-            let stitchedText = "";
-            let lastBottom = -1;
-
-            sortedWords.forEach((item) => {
-                if (stitchedText === "") {
-                    stitchedText += item.text;
-                } else {
-                    // New line check
-                    if (lastBottom !== -1 && item.top > lastBottom + 5) { // Tighter buffer for OCR.space
-                        stitchedText += "\n" + item.text;
-                    } else {
-                        stitchedText += " " + item.text;
-                    }
-                }
-                lastBottom = item.bottom;
-            });
-
-            console.log("Stitched Text:", stitchedText);
-
-            // 3. Send raw text to backend for AI Parsing
-            const response = await axios.post(route('user-details.extract-from-document'), {
-                text: stitchedText
-            });
-
-            if (response.data.success) {
-                setExtractedData(response.data.data);
-                toast.success('Profile data extracted successfully!');
-            } else {
-                toast.error(response.data.error || 'Failed to extract data');
-            }
-        } catch (error) {
-            console.error('Extraction error:', error);
-            // Check if it's an Axios error or generic
-            const msg = error.response?.data?.error || error.message || 'An error occurred during extraction';
-            toast.error(msg);
-        } finally {
-            setExtracting(false);
-        }
-    };
-
-    const handleSave = async () => {
-        if (!extractedData) {
-            toast.error('No data to save');
-            return;
-        }
-
-        setSaving(true);
-
-        try {
-            const response = await axios.post(route('user-details.save-extracted-data'), {
-                data: extractedData
-            });
-
-            if (response.data.success) {
-                toast.success('Profile data saved successfully!');
-                // Reload the page to show updated data
-                window.location.reload();
-            } else {
-                toast.error(response.data.error || 'Failed to save data');
-            }
-        } catch (error) {
-            console.error('Save error:', error);
-            toast.error(error.response?.data?.error || 'An error occurred while saving');
-        } finally {
-            setSaving(false);
-        }
+        post(route('user-details.project.store'), { onSuccess });
     };
 
     return (
-        <div className="bg-white/5 backdrop-blur-xl rounded-3xl shadow-xl border border-white/10 p-8 animate-fade-in-up">
-            <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/10">
-                <div>
-                    <h3 className="text-xl font-black text-white flex items-center gap-3">
-                        <Sparkles className="text-purple-400" size={24} />
-                        Create Profile via AI
-                    </h3>
-                    <p className="text-xs font-medium text-slate-400 mt-1">Upload your resume/CV and let AI extract your profile data</p>
-                </div>
+        <form onSubmit={submit} className="space-y-6">
+            <div>
+                <InputLabel value="Project Title" />
+                <TextInput value={data.title} onChange={e => setData('title', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.title} className="mt-2" />
             </div>
-
-            {!extractedData ? (
-                <div className="space-y-6">
-                    {/* File Upload Zone */}
-                    <div
-                        className="relative border-2 border-dashed border-white/20 rounded-2xl p-12 text-center hover:border-purple-500/50 transition-all cursor-pointer bg-white/5"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={handleFileDrop}
-                        onClick={() => document.getElementById('ai-file-upload').click()}
-                    >
-                        <input
-                            id="ai-file-upload"
-                            type="file"
-                            className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            onChange={(e) => e.target.files[0] && handleFileSelect(e.target.files[0])}
-                        />
-
-                        {selectedFile ? (
-                            <div className="space-y-4">
-                                {filePreview && (
-                                    <img src={filePreview} alt="Preview" className="max-h-64 mx-auto rounded-xl shadow-lg" />
-                                )}
-                                <div className="flex items-center justify-center gap-3 text-white">
-                                    <FileText size={24} className="text-purple-400" />
-                                    <span className="font-bold">{selectedFile.name}</span>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedFile(null);
-                                            setFilePreview(null);
-                                        }}
-                                        className="text-red-400 hover:text-red-300"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-                                <p className="text-xs text-slate-500">
-                                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <UploadCloud size={64} className="mx-auto text-slate-500" />
-                                <div>
-                                    <p className="text-white font-bold text-lg mb-2">Drop your resume here or click to browse</p>
-                                    <p className="text-slate-400 text-sm">
-                                        Supports PDF, Images (JPG, PNG), and Word documents (DOC, DOCX)
-                                    </p>
-                                    <p className="text-slate-500 text-xs mt-2">Maximum file size: 10MB</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Extract Button */}
-                    {selectedFile && (
-                        <div className="flex justify-center">
-                            <button
-                                onClick={handleExtract}
-                                disabled={extracting}
-                                className="px-8 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-2xl text-white font-bold text-sm uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3"
-                            >
-                                {extracting ? (
-                                    <>
-                                        <Loader2 size={20} className="animate-spin" />
-                                        Extracting Profile Data...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={20} />
-                                        Extract Profile Data
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                <div className="space-y-6">
-                    {/* Extracted Data Review */}
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-6 mb-6">
-                        <div className="flex items-center gap-3 text-green-400">
-                            <CheckCircle size={24} />
-                            <div>
-                                <p className="font-bold">Data Extracted Successfully!</p>
-                                <p className="text-sm text-slate-400">Review the extracted information below and click "Save to Profile" to add it to your profile.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Personal Info */}
-                    {extractedData.personal_info && Object.values(extractedData.personal_info).some(v => v !== null) && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <User size={20} className="text-purple-400" />
-                                Personal Information
-                            </h4>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                {Object.entries(extractedData.personal_info).map(([key, value]) => value && (
-                                    <div key={key}>
-                                        <span className="text-slate-500 text-xs uppercase tracking-wider">{key.replace(/_/g, ' ')}</span>
-                                        <p className="text-white font-medium">{value}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Education */}
-                    {extractedData.education && extractedData.education.length > 0 && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <GraduationCap size={20} className="text-purple-400" />
-                                Education ({extractedData.education.length})
-                            </h4>
-                            <div className="space-y-3">
-                                {extractedData.education.map((edu, idx) => (
-                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
-                                        <p className="text-white font-bold">{edu.degree}</p>
-                                        <p className="text-slate-400 text-sm">{edu.institution}</p>
-                                        <p className="text-slate-500 text-xs mt-1">{edu.start_date} - {edu.currently_studying ? 'Present' : edu.end_date}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Experience */}
-                    {extractedData.experience && extractedData.experience.length > 0 && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <Briefcase size={20} className="text-purple-400" />
-                                Experience ({extractedData.experience.length})
-                            </h4>
-                            <div className="space-y-3">
-                                {extractedData.experience.map((exp, idx) => (
-                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
-                                        <p className="text-white font-bold">{exp.position}</p>
-                                        <p className="text-slate-400 text-sm">{exp.company}</p>
-                                        <p className="text-slate-500 text-xs mt-1">{exp.start_date} - {exp.currently_working ? 'Present' : exp.end_date}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Skills */}
-                    {extractedData.skills && extractedData.skills.length > 0 && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <Zap size={20} className="text-purple-400" />
-                                Skills ({extractedData.skills.length})
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                                {extractedData.skills.map((skill, idx) => (
-                                    <span key={idx} className="px-4 py-2 bg-white/10 rounded-xl text-white text-sm font-medium">
-                                        {skill.name} <span className="text-slate-400 text-xs">({skill.level})</span>
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Certifications */}
-                    {extractedData.certifications && extractedData.certifications.length > 0 && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <Award size={20} className="text-purple-400" />
-                                Certifications ({extractedData.certifications.length})
-                            </h4>
-                            <div className="space-y-3">
-                                {extractedData.certifications.map((cert, idx) => (
-                                    <div key={idx} className="bg-white/5 rounded-xl p-4">
-                                        <p className="text-white font-bold">{cert.name}</p>
-                                        <p className="text-slate-400 text-sm">{cert.issuing_organization}</p>
-                                        <p className="text-slate-500 text-xs mt-1">{cert.issue_date}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Languages */}
-                    {extractedData.languages && extractedData.languages.length > 0 && (
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                            <h4 className="font-black text-white text-lg mb-4 flex items-center gap-2">
-                                <Languages size={20} className="text-purple-400" />
-                                Languages ({extractedData.languages.length})
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                                {extractedData.languages.map((lang, idx) => (
-                                    <span key={idx} className="px-4 py-2 bg-white/10 rounded-xl text-white text-sm font-medium">
-                                        {lang.name} <span className="text-slate-400 text-xs">({lang.proficiency})</span>
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Action Buttons */}
-                    <div className="flex gap-4 justify-end pt-6 border-t border-white/10">
-                        <button
-                            onClick={() => {
-                                setExtractedData(null);
-                                setSelectedFile(null);
-                                setFilePreview(null);
-                            }}
-                            className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl text-white font-bold text-sm uppercase tracking-wider transition-all"
-                        >
-                            Start Over
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            disabled={saving}
-                            className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-xl text-white font-bold text-sm uppercase tracking-wider shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            {saving ? (
-                                <>
-                                    <Loader2 size={20} className="animate-spin" />
-                                    Saving...
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle size={20} />
-                                    Save to Profile
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-            )}
-        </div>
+            <div>
+                <InputLabel value="Project URL" />
+                <TextInput value={data.url} onChange={e => setData('url', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.url} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Technologies Used" />
+                <TextInput value={data.technologies} onChange={e => setData('technologies', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" placeholder="e.g. React, Laravel, Docker" />
+                <InputError message={errors.technologies} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Description" />
+                <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                <InputError message={errors.description} className="mt-2" />
+            </div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Project</PrimaryButton></div>
+        </form>
     );
 }
+
+function AwardForm({ onSuccess }) {
+    const { data, setData, post, processing, errors } = useForm({
+        title: '', issuer: '', date: '', description: ''
+    });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('user-details.award.store'), { onSuccess });
+    };
+
+    return (
+        <form onSubmit={submit} className="space-y-6">
+            <div>
+                <InputLabel value="Award Title" />
+                <TextInput value={data.title} onChange={e => setData('title', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.title} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Issuer" />
+                <TextInput value={data.issuer} onChange={e => setData('issuer', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.issuer} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Date" />
+                <TextInput value={data.date} onChange={e => setData('date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" placeholder="e.g. June 2023" />
+                <InputError message={errors.date} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Description" />
+                <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                <InputError message={errors.description} className="mt-2" />
+            </div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Award</PrimaryButton></div>
+        </form>
+    );
+}
+
+function VolunteerForm({ onSuccess }) {
+    const { data, setData, post, processing, errors } = useForm({
+        organization: '', role: '', start_date: '', end_date: '', currently_volunteering: false, description: ''
+    });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('user-details.volunteer-work.store'), { onSuccess });
+    };
+
+    return (
+        <form onSubmit={submit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                    <InputLabel value="Organization" />
+                    <TextInput value={data.organization} onChange={e => setData('organization', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.organization} className="mt-2" />
+                </div>
+                <div className="md:col-span-2">
+                    <InputLabel value="Role" />
+                    <TextInput value={data.role} onChange={e => setData('role', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                    <InputError message={errors.role} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="Start Date" />
+                    <TextInput value={data.start_date} onChange={e => setData('start_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" placeholder="e.g. Jan 2022" />
+                    <InputError message={errors.start_date} className="mt-2" />
+                </div>
+                <div>
+                    <InputLabel value="End Date" />
+                    <TextInput value={data.end_date} onChange={e => setData('end_date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" placeholder="e.g. Present" />
+                    <InputError message={errors.end_date} className="mt-2" />
+                </div>
+            </div>
+            <div>
+                <InputLabel value="Description" />
+                <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                <InputError message={errors.description} className="mt-2" />
+            </div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Volunteering</PrimaryButton></div>
+        </form>
+    );
+}
+
+function PublicationForm({ onSuccess }) {
+    const { data, setData, post, processing, errors } = useForm({
+        title: '', publisher: '', date: '', url: '', description: ''
+    });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('user-details.publication.store'), { onSuccess });
+    };
+
+    return (
+        <form onSubmit={submit} className="space-y-6">
+            <div>
+                <InputLabel value="Title" />
+                <TextInput value={data.title} onChange={e => setData('title', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.title} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Publisher / Conference" />
+                <TextInput value={data.publisher} onChange={e => setData('publisher', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.publisher} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Date" />
+                <TextInput value={data.date} onChange={e => setData('date', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" placeholder="e.g. 2023-05-20" />
+                <InputError message={errors.date} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="URL" />
+                <TextInput value={data.url} onChange={e => setData('url', e.target.value)} className="w-full bg-[#0f172a] border-white/10 text-white" />
+                <InputError message={errors.url} className="mt-2" />
+            </div>
+            <div>
+                <InputLabel value="Description" />
+                <textarea value={data.description} onChange={e => setData('description', e.target.value)} className="w-full rounded-2xl border-white/10 bg-[#0f172a] text-white px-4 py-3 min-h-[100px]" />
+                <InputError message={errors.description} className="mt-2" />
+            </div>
+            <div className="flex justify-end pt-4"><PrimaryButton disabled={processing}>Save Publication</PrimaryButton></div>
+        </form>
+    );
+}
+
+

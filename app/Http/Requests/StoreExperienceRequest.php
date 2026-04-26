@@ -21,6 +21,7 @@ class StoreExperienceRequest extends FormRequest
             'end_date' => ['nullable', 'date', 'after:start_date'],
             'currently_working' => ['nullable', 'boolean'],
             'responsibilities' => ['nullable', 'string'],
+            'description' => ['nullable', 'string'],
         ];
     }
 }

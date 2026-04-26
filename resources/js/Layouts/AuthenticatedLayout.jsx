@@ -1,5 +1,6 @@
 import { useState, Fragment } from 'react';
 import { Link, usePage } from '@inertiajs/react';
+import { LogOut, User } from 'lucide-react';
 import FlashMessage from '@/Components/FlashMessage';
 
 export default function Authenticated({ user, header, children }) {
@@ -41,43 +42,23 @@ export default function Authenticated({ user, header, children }) {
                                         Admin Panel
                                     </NavLink>
                                 )}
+                                <NavLink href={route('user-details.index')} active={route().current('user-details.*')}>
+                                    Profile
+                                </NavLink>
                             </div>
                         </div>
 
                         <div className="hidden sm:flex sm:items-center sm:ms-6">
-                            <div className="ms-3 relative">
-                                <Dropdown>
-                                    <Dropdown.Trigger>
-                                        <span className="inline-flex rounded-md">
-                                            <button
-                                                type="button"
-                                                className="inline-flex items-center px-4 py-2 border border-white/10 text-sm leading-4 font-bold rounded-2xl text-slate-300 bg-white/5 hover:bg-white/10 hover:text-white focus:outline-none transition ease-in-out duration-150 backdrop-blur-md"
-                                            >
-                                                {user.name}
-
-                                                <svg
-                                                    className="ms-2 -me-0.5 h-4 w-4"
-                                                    xmlns="http://www.w3.org/2000/svg"
-                                                    viewBox="0 0 20 20"
-                                                    fill="currentColor"
-                                                >
-                                                    <path
-                                                        fillRule="evenodd"
-                                                        d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                                        clipRule="evenodd"
-                                                    />
-                                                </svg>
-                                            </button>
-                                        </span>
-                                    </Dropdown.Trigger>
-
-                                    <Dropdown.Content>
-                                        <Dropdown.Link href={route('profile.edit')}>Profile</Dropdown.Link>
-                                        <Dropdown.Link href={route('logout')} method="post" as="button">
-                                            Log Out
-                                        </Dropdown.Link>
-                                    </Dropdown.Content>
-                                </Dropdown>
+                            <div className="flex items-center gap-4">
+                                <Link
+                                    href={route('logout')}
+                                    method="post"
+                                    as="button"
+                                    className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-white hover:bg-red-500/20 transition-all border border-white/10"
+                                    title="Log Out"
+                                >
+                                    <LogOut size={18} />
+                                </Link>
                             </div>
                         </div>
 

@@ -14,7 +14,10 @@ export default function ElementPopover({
     isMultiSelect = false,
     onAlign,
     onLayerAction,
-    isScrolling = false
+    isScrolling = false,
+    onCopyStyle,
+    onPasteStyle,
+    onLink
 }) {
     const [showMenu, setShowMenu] = useState(false);
 
@@ -59,7 +62,7 @@ export default function ElementPopover({
                         <path d="M6 8.5V13.5" stroke="currentColor" strokeWidth="1.2" />
                     </svg>
                 }
-                onClick={() => { }}
+                onClick={onCopyStyle}
                 tooltip="Copy style"
             />
 
@@ -125,12 +128,12 @@ export default function ElementPopover({
                                 }
                                 label="Copy style"
                                 shortcut="Ctrl+Alt+C"
-                                onClick={() => { }}
+                                onClick={() => onCopyStyle?.()}
                             />
                             <MenuItem
                                 label="Paste"
                                 shortcut="Ctrl+V"
-                                onClick={() => { }}
+                                onClick={() => onPasteStyle?.()}
                             />
                             <MenuItem
                                 icon={
@@ -205,7 +208,10 @@ export default function ElementPopover({
                                 icon={<Link2 size={16} />}
                                 label="Link"
                                 shortcut="Ctrl+K"
-                                onClick={() => { }}
+                                onClick={() => {
+                                    const url = prompt('Enter link URL:', selection?.link || 'https://');
+                                    if (url && url !== 'https://') onLink?.(url);
+                                }}
                             />
                         </motion.div>
                     )}
